@@ -1,11 +1,21 @@
 "use client";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Calendar, Clock, MapPin, ArrowRight } from "lucide-react";
 import styles from "./Workshops.module.scss";
-import workshopsList from "@/data/workshops.json";
+import staticWorkshops from "@/data/workshops.json";
 
 export default function WorkshopsGrid() {
+  // Admin-managed workshops; falls back to the static bundle when none exist.
+  const [workshopsList, setWorkshopsList] = useState(staticWorkshops);
+  useEffect(() => {
+    fetch("/api/public/workshops/", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => { if (Array.isArray(d.workshops) && d.workshops.length) setWorkshopsList(d.workshops); })
+      .catch(() => {});
+  }, []);
+
   return (
     <section className={styles.gridSection}>
       <div className={styles.bgGlow1} />

@@ -23,7 +23,8 @@ export default function FixedCTA() {
     const check = () => {
       apiFetch("/api/auth/check")
         .then(r => r.json())
-        .then(data => setIsAuthenticated(!!data.authenticated))
+        // Only a student session counts as "logged in" on the website.
+        .then(data => setIsAuthenticated(data.authenticated && data.user?.role === "student"))
         .catch(() => setIsAuthenticated(false));
     };
     check();

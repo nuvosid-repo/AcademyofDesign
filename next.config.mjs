@@ -1,15 +1,17 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Produce a fully static site into the `out/` folder on `next build`.
-  output: 'export',
+  // Server-rendered (SSR) build so the app can use Route Handlers (app/api),
+  // middleware, and dynamic auth for the student & admin portals.
+  // (Static export was removed to enable these server features.)
 
-  // The static export has no server, so the built-in Image Optimizer is disabled.
+  // Image Optimizer stays disabled to avoid a native `sharp` dependency;
+  // remove this if you want optimized images and add `sharp`.
   images: {
     unoptimized: true,
   },
 
-  // Emit each route as a folder with index.html (e.g. /workshops/index.html),
-  // which resolves cleanly on any static host (Hostinger, cPanel, Netlify, S3).
+  // Emit clean folder URLs with a trailing slash (kept from the old config
+  // so existing links/behaviour stay identical).
   trailingSlash: true,
 };
 

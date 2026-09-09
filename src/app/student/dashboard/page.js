@@ -1,0 +1,485 @@
+"use client";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  BookOpen,
+  Radio,
+  ClipboardCheck,
+  Award,
+  Clock,
+  ArrowRight,
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  ImageIcon,
+  CalendarDays,
+  Trophy,
+} from "lucide-react";
+import StudentShell from "@/components/portal/StudentShell";
+import { useSession } from "@/context/SessionContext";
+import { apiFetch } from "@/lib/api";
+
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
+
+function fmtDate(d) {
+  if (!d) return "";
+  try {
+    return new Date(d).toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return d;
+  }
+}
+
+/* Month calendar that marks the student's live-class dates; hover a marked
+   date to see its live class details. Data comes from the dashboard API. */
+function LiveClassCalendar({ liveClasses = [] }) {
+  const today = new Date();
+  const [view, setView] = useState({
+    y: today.getFullYear(),
+    mo: today.getMonth(),
+  });
+
+  const byDate = useMemo(() => {
+    const m = {};
+    for (const l of liveClasses) {
+      if (!l.date) continue;
+      (m[l.date] ||= []).push(l);
+    }
+    return m;
+  }, [liveClasses]);
+
+  const firstDay = new Date(view.y, view.mo, 1).getDay();
+  const daysInMonth = new Date(view.y, view.mo + 1, 0).getDate();
+  const cells = [
+    ...Array(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  const shift = (d) =>
+    setView((v) => {
+      let mo = v.mo + d,
+        y = v.y;
+      if (mo < 0) {
+        mo = 11;
+        y--;
+      }
+      if (mo > 11) {
+        mo = 0;
+        y++;
+      }
+      return { y, mo };
+    });
+  const key = (d) =>
+    `${view.y}-${String(view.mo + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const isToday = (d) =>
+    today.getFullYear() === view.y &&
+    today.getMonth() === view.mo &&
+    today.getDate() === d;
+
+  return (
+    <div className="pf-card p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-bold text-lg flex items-center gap-2">
+          <CalendarDays size={18} className="text-[#db254f]" /> Live Class
+          Calendar
+        </h3>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => shift(-1)}
+            className="w-8 h-8 rounded-lg pf-hover flex items-center justify-center pf-muted"
+            aria-label="Previous month"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span className="text-sm font-semibold w-24 text-center">
+            {MONTHS[view.mo].slice(0, 3)} {view.y}
+          </span>
+          <button
+            onClick={() => shift(1)}
+            className="w-8 h-8 rounded-lg pf-hover flex items-center justify-center pf-muted"
+            aria-label="Next month"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {WEEKDAYS.map((w, idx) => (
+          <div
+            key={idx}
+            className="text-[11px] pf-faint text-center py-1 font-medium"
+          >
+            {w}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((d, idx) => {
+          if (d === null) return <div key={idx} />;
+          const list = byDate[key(d)];
+          const has = !!list;
+          return (
+            <div key={idx} className="relative group aspect-square">
+              <div
+                className={`w-full h-full rounded-lg flex items-center justify-center text-sm transition ${has ? "bg-[#db254f] text-white font-semibold cursor-pointer" : isToday(d) ? "ring-1 ring-[#db254f]/50 text-[#db254f] font-semibold" : "pf-muted pf-hover"}`}
+              >
+                {d}
+              </div>
+              {has && (
+                <div className="absolute z-50 left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 hidden group-hover:block">
+                  <div className="pf-card p-3 shadow-xl text-left space-y-2">
+                    {list.map((l) => (
+                      <div key={l.id}>
+                        <div className="text-sm font-semibold leading-tight">
+                          {l.title}
+                        </div>
+                        <div className="text-xs pf-muted mt-0.5">
+                          {l.course} · {l.time || "TBA"}
+                        </div>
+                        {l.link && (
+                          <a
+                            href={l.link}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-[#db254f] hover:underline inline-flex items-center gap-1 mt-1"
+                          >
+                            <ExternalLink size={11} /> Join
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-xs pf-faint mt-3 flex items-center gap-1.5">
+        <span className="w-2.5 h-2.5 rounded bg-[#db254f] inline-block" /> Live
+        class — hover the date for details
+      </p>
+    </div>
+  );
+}
+
+/* Auto-advancing banner slider — images come from the admin Banner master. */
+function BannerSlider() {
+  const [banners, setBanners] = useState([]);
+  const [i, setI] = useState(0);
+
+  useEffect(() => {
+    apiFetch("/api/student/banners", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setBanners(d.banners || []))
+      .catch(() => setBanners([]));
+  }, []);
+
+  useEffect(() => {
+    if (banners.length < 2) return;
+    const t = setInterval(() => setI((x) => (x + 1) % banners.length), 4000);
+    return () => clearInterval(t);
+  }, [banners.length]);
+
+  const go = (n) => setI((x) => (n + banners.length) % banners.length);
+
+  if (!banners.length) {
+    return (
+      <div className="pf-card h-full min-h-[200px] flex flex-col items-center justify-center text-center p-6">
+        <div className="w-12 h-12 rounded-xl pf-chip flex items-center justify-center mb-3">
+          <ImageIcon size={22} />
+        </div>
+        <p className="pf-muted text-sm">
+          No banners yet. Admin can upload banners from Banner master.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pf-card overflow-hidden h-full min-h-[200px] relative group">
+      {banners.map((b, idx) => (
+        <img
+          key={b.id}
+          src={b.image}
+          alt="Banner"
+          className="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
+          style={{ opacity: idx === i ? 1 : 0 }}
+        />
+      ))}
+      {banners.length > 1 && (
+        <>
+          <button
+            onClick={() => go(i - 1)}
+            className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+            aria-label="Previous"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <button
+            onClick={() => go(i + 1)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+            aria-label="Next"
+          >
+            <ChevronRight size={18} />
+          </button>
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+            {banners.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setI(idx)}
+                className={`h-1.5 rounded-full transition-all ring-1 ring-black/10 ${idx === i ? "w-5 bg-[#db254f]" : "w-1.5 bg-white/70 hover:bg-[#db254f]/70"}`}
+                aria-label={`Go to banner ${idx + 1}`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export default function StudentDashboard() {
+  const { user } = useSession();
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch("/api/student/dashboard", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setData(d))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const s = data?.stats || {
+    enrolled: 0,
+    liveClasses: 0,
+    assessments: 0,
+    certificates: 0,
+  };
+  const tiles = [
+    { label: "Enrolled Courses", value: s.enrolled, icon: BookOpen },
+    { label: "Live Classes", value: s.liveClasses, icon: Radio },
+    { label: "Assessments", value: s.assessments, icon: ClipboardCheck },
+    { label: "Certificates", value: s.certificates, icon: Award },
+  ];
+
+  return (
+    <StudentShell subtitle="Dashboard">
+      {/* Row 1 — welcome (wide) + banner */}
+      <div className="grid lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 pf-card overflow-hidden relative flex min-h-[150px]">
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(100deg, rgba(219,37,79,0.12), transparent 60%)",
+            }}
+            aria-hidden="true"
+          />
+          <div className="relative p-6 flex flex-col justify-center">
+            <p className="text-xs uppercase tracking-[0.18em] text-[#db254f] font-semibold mb-1.5">
+              Welcome back
+            </p>
+            <h2 className="text-2xl md:text-3xl font-extrabold">
+              {user?.name || data?.student?.name || "Student"} 👋
+            </h2>
+            <p className="pf-muted mt-1.5 text-sm">
+              Your courses, live sessions, scores and assessments — all in one
+              place.
+            </p>
+          </div>
+        </div>
+        <BannerSlider />
+      </div>
+
+      {/* Row 2 — stat cards (compact) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+        {tiles.map(({ label, value, icon: Icon }) => (
+          <div key={label} className="pf-card pf-stat pf-card-hover p-4">
+            <div className="relative flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl pf-chip flex items-center justify-center shrink-0">
+                <Icon size={19} />
+              </div>
+              <div>
+                <div className="text-2xl font-extrabold leading-none">
+                  {loading ? "…" : value}
+                </div>
+                <div className="text-xs pf-muted mt-1">{label}</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Row 3 — calendar, upcoming, scores side by side */}
+      <div className="grid lg:grid-cols-3 gap-4 mt-4 items-start">
+        <LiveClassCalendar liveClasses={data?.liveClasses || []} />
+
+        {/* My scores */}
+        <div className="pf-card p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold flex items-center gap-2">
+              <Trophy size={17} className="text-[#db254f]" /> My Scores
+            </h3>
+            {data?.results?.length > 0 && (
+              <span className="text-sm">
+                <span className="pf-muted">Avg </span>
+                <span className="font-extrabold text-[#db254f]">
+                  {data.avgScore}%
+                </span>
+              </span>
+            )}
+          </div>
+          {loading ? (
+            <p className="pf-muted text-sm">Loading…</p>
+          ) : data?.results?.length ? (
+            <div className="space-y-2.5">
+              {data.results.slice(0, 4).map((r) => (
+                <div
+                  key={r.id}
+                  className="flex items-center justify-between gap-2 rounded-xl border pf-border p-3"
+                >
+                  <div className="min-w-0">
+                    <div className="font-semibold text-sm truncate">
+                      {r.assessmentTitle}
+                    </div>
+                    <div className="text-xs pf-muted mt-0.5 truncate">
+                      {r.type} · {r.score}/{r.total}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-lg font-extrabold">
+                      {r.percentage}%
+                    </span>
+                    <span
+                      className={`text-[11px] px-2 py-0.5 rounded-md font-medium ${r.passed ? "bg-emerald-500/15 text-emerald-500" : "bg-rose-500/15 text-rose-500"}`}
+                    >
+                      {r.passed ? "Pass" : "Fail"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-5">
+              <div className="w-11 h-11 rounded-xl pf-chip flex items-center justify-center mx-auto mb-2.5">
+                <Trophy size={20} />
+              </div>
+              <p className="pf-muted text-sm">
+                No scores yet. Complete an assessment to see them here.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Upcoming live classes */}
+        <div className="pf-card p-5">
+          <h3 className="font-bold mb-3 flex items-center gap-2">
+            <Radio size={17} className="text-[#db254f]" /> Upcoming Live Classes
+          </h3>
+          {loading ? (
+            <p className="pf-muted text-sm">Loading…</p>
+          ) : data?.liveClasses?.length ? (
+            <div className="space-y-2.5">
+              {data.liveClasses.slice(0, 4).map((l) => (
+                <div
+                  key={l.id}
+                  className="flex items-center justify-between gap-2 rounded-xl border pf-border p-3 pf-hover transition"
+                >
+                  <div className="min-w-0">
+                    <div className="font-semibold text-sm truncate">
+                      {l.title}
+                    </div>
+                    <div className="text-xs pf-muted mt-0.5 truncate">
+                      {l.course} · {fmtDate(l.date)} {l.time}
+                    </div>
+                  </div>
+                  {l.link && (
+                    <a
+                      href={l.link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold rounded-full bg-[#db254f] hover:bg-[#b91d40] text-white px-3 py-1.5 transition"
+                    >
+                      <ExternalLink size={12} /> Join
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="pf-muted text-sm">No upcoming live classes.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Row 4 — continue learning */}
+      <div className="pf-card p-5 mt-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-bold flex items-center gap-2">
+            <BookOpen size={17} className="text-[#db254f]" /> Continue Learning
+          </h3>
+          <Link
+            href="/student/my-courses"
+            className="text-sm text-[#db254f] hover:underline inline-flex items-center gap-1 font-medium"
+          >
+            View all <ArrowRight size={14} />
+          </Link>
+        </div>
+        {loading ? (
+          <p className="pf-muted text-sm">Loading…</p>
+        ) : data?.courses?.length ? (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {data.courses.map((c) => (
+              <Link
+                key={c.id}
+                href={`/student/courses/${c.id}`}
+                className="pf-card pf-card-hover p-4 flex items-center gap-3"
+              >
+                <div className="w-10 h-10 rounded-xl pf-chip flex items-center justify-center shrink-0">
+                  <BookOpen size={18} />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[11px] uppercase tracking-wide text-[#db254f] font-semibold block truncate">
+                    {c.category || "Course"}
+                  </span>
+                  <h4 className="font-bold text-sm truncate">{c.title}</h4>
+                  {c.duration && (
+                    <div className="flex items-center gap-1 text-[11px] pf-faint mt-0.5">
+                      <Clock size={11} /> {c.duration}
+                    </div>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <p className="pf-muted text-sm">
+            You haven&apos;t enrolled in any course yet. Explore courses on the
+            website to get started.
+          </p>
+        )}
+      </div>
+    </StudentShell>
+  );
+}

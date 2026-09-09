@@ -1,10 +1,6 @@
 import { Inter, Bebas_Neue } from "next/font/google";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./globals.css";
-import Navbar from "@/components/Layout/Navbar";
-import Footer from "@/components/Layout/Footer";
-import FixedCTA from "@/components/Home/FixedCTA";
-import Providers from "@/components/Providers";
 
 const inter = Inter({ subsets: ["latin"] });
 const bebas = Bebas_Neue({
@@ -21,6 +17,9 @@ export const metadata = {
 // Runs before first paint to set the saved theme and avoid a flash.
 const themeInitScript = `(function(){try{var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();`;
 
+// Root layout is now a MINIMAL common shell (html/body, fonts, theme, base CSS)
+// shared by all three sections. Section-specific chrome lives in each section's
+// own layout: (website)/layout.js, student/layout.js, admin/layout.js.
 export default function RootLayout({ children }) {
   return (
     <html lang="en" data-theme="dark" suppressHydrationWarning>
@@ -28,14 +27,7 @@ export default function RootLayout({ children }) {
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className={`${inter.className} ${bebas.variable} min-h-screen flex flex-col antialiased`} suppressHydrationWarning>
-        <Providers>
-          <Navbar />
-          <main className="flex-grow pt-16">
-            {children}
-          </main>
-          <Footer />
-          <FixedCTA />
-        </Providers>
+        {children}
       </body>
     </html>
   );

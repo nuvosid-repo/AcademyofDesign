@@ -11,7 +11,7 @@ export default function AuthModal() {
   const { isOpen, mode, setMode, closeModal } = useAuth();
   const router = useRouter();
 
-  const [formData, setFormData] = useState({ name: "", email: "", password: "" });
+  const [formData, setFormData] = useState({ name: "", email: "", contactNumber: "", password: "" });
   const [error,    setError]    = useState("");
   const [success,  setSuccess]  = useState("");
   const [loading,  setLoading]  = useState(false);
@@ -21,7 +21,7 @@ export default function AuthModal() {
 
   /* reset form when modal opens or mode switches */
   useEffect(() => {
-    setFormData({ name: "", email: "", password: "" });
+    setFormData({ name: "", email: "", contactNumber: "", password: "" });
     setError("");
     setSuccess("");
     setLoading(false);
@@ -57,7 +57,8 @@ export default function AuthModal() {
       const res  = await apiFetch(isLogin ? "/api/login" : "/api/signup", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(formData),
+        // Website login is students-only — admin accounts are rejected here.
+        body:    JSON.stringify(isLogin ? { ...formData, requiredRole: "student" } : formData),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Something went wrong");
@@ -66,9 +67,11 @@ export default function AuthModal() {
         // Persist the JWT so subsequent requests (and other components) see it.
         if (data.token) setToken(data.token);
         setSuccess("Welcome back! Redirecting…");
+        // Website login is for students → always go to the student dashboard.
+        // (Admins sign in through the separate /admin/login page.)
         setTimeout(() => {
           closeModal();
-          router.refresh();
+          router.push("/student/dashboard");
         }, 900);
       } else {
         setSuccess("Account created! Please sign in.");
@@ -185,6 +188,36 @@ export default function AuthModal() {
                       placeholder="Your full name"
                       required={!isLogin}
                       autoComplete="name"
+                    />
+                  </motion.div>
+                )}
+
+                {!isLogin && (
+                  <motion.div
+                    key="mobile"
+                    initial={{ opacity: 0, height: 0,    marginBottom: 0 }}
+                    animate={{ opacity: 1, height: "auto", marginBottom: "1.2rem" }}
+                    exit={{    opacity: 0, height: 0,    marginBottom: 0 }}
+                    style={{ overflow: "hidden" }}
+                  >
+                    <label className={styles.label} htmlFor="am-mobile">Mobile Number</label>
+                    <input
+                      className={styles.input}
+                      id="am-mobile"
+                      name="contactNumber"
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={10}
+                      value={formData.contactNumber}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          contactNumber: e.target.value.replace(/\D/g, "").slice(0, 10),
+                        }))
+                      }
+                      placeholder="10-digit mobile number"
+                      required={!isLogin}
+                      autoComplete="tel"
                     />
                   </motion.div>
                 )}

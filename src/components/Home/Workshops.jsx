@@ -1,15 +1,24 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/dist/ScrollTrigger";
 import Link from "next/link";
 import { Calendar, MapPin, Clock, ArrowRight, ArrowUpRight } from "lucide-react";
 import styles from "./Workshops.module.scss";
-import workshopsList from "@/data/workshops.json";
+import staticWorkshops from "@/data/workshops.json";
 
 export default function Workshops() {
   const containerRef = useRef(null);
   const cardsRef = useRef([]);
+
+  // Admin-managed workshops; falls back to the static bundle when none exist.
+  const [workshopsList, setWorkshopsList] = useState(staticWorkshops);
+  useEffect(() => {
+    fetch("/api/public/workshops/", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => { if (Array.isArray(d.workshops) && d.workshops.length) setWorkshopsList(d.workshops); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
@@ -33,7 +42,7 @@ export default function Workshops() {
     }, containerRef);
 
     return () => ctx.revert();
-  }, []);
+  }, [workshopsList]);
 
   return (
     <section ref={containerRef} className={styles.workshopsSection}>

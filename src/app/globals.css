@@ -106,3 +106,139 @@ h1, h2, h3, h4, h5, h6, .display-font {
 p, .desc, .description, .subtitle, [class*="desc"], [class*="description"], [class*="subtitle"], [class*="duration"] {
   color: rgba(var(--fg-rgb), 0.85) !important;
 }
+
+/* SweetAlert-style popup entrance */
+@keyframes swalPop {
+  from { transform: scale(0.9); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+.swal-pop { animation: swalPop 0.18s ease-out; }
+
+/* Bootstrap resets `button { border-radius: 0 }` (unlayered) which overrides
+   Tailwind's layered rounding utilities on <button>. This !important helper
+   restores pill/circle rounding on admin buttons. */
+.btn-pill { border-radius: 9999px !important; }
+
+/* Hide scrollbar for date/time picker columns (still scrollable). */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Bootstrap zeroes <button> radius; restore rounding for buttons inside the
+   date/time picker popup (calendar days, time pills, nav arrows). */
+.dtp button { border-radius: 0.5rem; }
+
+/* Admin card headers (rose gradient): the global display-font + Bootstrap add
+   margin/line-height to headings that pushes the title off-center next to its
+   icon in the flex row. Neutralize it so icon + title align on every page. */
+.from-rose-50\/60 h1,
+.from-rose-50\/60 h2,
+.from-rose-50\/60 h3,
+.from-rose-50\/60 h4 {
+  margin: 0 !important;
+  line-height: 1 !important;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Student portal theming — premium surfaces that flip with data-theme.
+   Uses the site's --bg-* / --fg-rgb tokens so dark & light both work.
+   ════════════════════════════════════════════════════════════════ */
+.pf-page { background: var(--bg-page); color: var(--fg); }
+
+/* Decorative brand glow behind the portal content */
+.pf-glow {
+  position: fixed;
+  pointer-events: none;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.5;
+}
+
+.pf-panel {
+  background: color-mix(in srgb, var(--bg-elev) 82%, transparent);
+  border-color: rgba(var(--fg-rgb), 0.08);
+  backdrop-filter: blur(12px);
+}
+
+.pf-card {
+  background: var(--bg-elev);
+  border: 1px solid rgba(var(--fg-rgb), 0.08);
+  border-radius: 1.25rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 12px 30px -18px rgba(0,0,0,0.25);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.pf-card-hover:hover {
+  transform: translateY(-3px);
+  border-color: rgba(219,37,79,0.35);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 22px 44px -22px rgba(219,37,79,0.35);
+}
+
+/* Gradient stat card accent */
+.pf-stat { position: relative; overflow: hidden; }
+.pf-stat::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 120% at 100% 0%, rgba(219,37,79,0.10), transparent 55%);
+  pointer-events: none;
+}
+
+.pf-muted  { color: rgba(var(--fg-rgb), 0.60); }
+.pf-faint  { color: rgba(var(--fg-rgb), 0.42); }
+.pf-border { border-color: rgba(var(--fg-rgb), 0.08); }
+.pf-divide > * + * { border-top: 1px solid rgba(var(--fg-rgb), 0.08); }
+.pf-hover:hover { background: rgba(var(--fg-rgb), 0.05); }
+
+/* Sidebar nav rows */
+.pf-nav {
+  color: rgba(var(--fg-rgb), 0.62);
+  border: 1px solid transparent;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.pf-nav:hover { color: var(--fg); background: rgba(var(--fg-rgb), 0.05); }
+.pf-nav-active {
+  background: linear-gradient(90deg, rgba(219,37,79,0.16), rgba(229,107,133,0.06));
+  color: #db254f;
+  border: 1px solid rgba(219,37,79,0.30);
+  box-shadow: inset 0 0 0 1px rgba(219,37,79,0.04);
+}
+:root[data-theme="dark"] .pf-nav-active { color: #f2809b; }
+
+/* Icon chip */
+.pf-chip {
+  background: rgba(219,37,79,0.12);
+  color: #db254f;
+  border: 1px solid rgba(219,37,79,0.18);
+}
+:root[data-theme="dark"] .pf-chip { color: #f2809b; }
+
+/* ── Softer dark palette for the STUDENT PORTAL only ──
+   Pure-black (#030303) is harsh for long study/exam sessions. Inside the portal
+   we lift the surfaces to a comfortable NEUTRAL dark gray (no blue/purple tint)
+   with a subtle gradient for depth. Redefining the tokens on .pf-page cascades
+   to all pf-* surfaces. Website dark mode and light mode are untouched. */
+:root[data-theme="dark"] .pf-page {
+  --bg-page:  #151515;
+  --bg-elev:  #1e1e1e;
+  --bg-elev2: #262626;
+  background: linear-gradient(180deg, #181818, #121212);
+}
+/* Card surfaces get a soft raised border + gentle top sheen in the softer dark */
+:root[data-theme="dark"] .pf-page .pf-card {
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 14px 34px -22px rgba(0,0,0,0.6);
+}
+/* Slightly brighter secondary text for readability on the lifted dark */
+:root[data-theme="dark"] .pf-page .pf-muted { color: rgba(255, 255, 255, 0.72); }
+:root[data-theme="dark"] .pf-page .pf-faint { color: rgba(255, 255, 255, 0.52); }
+
+/* Quiz question transition (one-at-a-time player) */
+.quiz-fade { animation: quizFade 0.28s ease; }
+@keyframes quizFade {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Portal buttons: replace the browser's default blue focus outline with a
+   subtle brand ring (only for keyboard focus). */
+.pf-page button:focus { outline: none; }
+.pf-page button:focus-visible { outline: 2px solid rgba(219,37,79,0.55); outline-offset: 2px; }

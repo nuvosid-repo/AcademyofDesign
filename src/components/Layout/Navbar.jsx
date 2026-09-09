@@ -49,7 +49,9 @@ export default function Navbar() {
         const res = await apiFetch("/api/auth/check");
         if (res.ok) {
           const data = await res.json();
-          if (data.authenticated) {
+          // Website only recognises STUDENT sessions — an admin token must not
+          // make the public site appear logged in.
+          if (data.authenticated && data.user?.role === "student") {
             setIsAuthenticated(true);
             setUser(data.user);
             return;
@@ -140,7 +142,7 @@ export default function Navbar() {
             </button>
           )}
           <button
-            onClick={() => openModal("login")}
+            onClick={() => (isAuthenticated ? router.push("/student/dashboard") : openModal("login"))}
             className={styles.enrollBtn}
           >
             Student Portal

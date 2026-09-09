@@ -23,7 +23,12 @@ export default function WorkshopRegistration({ workshop }) {
   const [transactionId, setTransactionId] = useState("");
 
   const handleInputChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    // Phone/contact fields: digits only, max 10.
+    const next = (name === "phone" || name === "contactNumber")
+      ? value.replace(/\D/g, "").slice(0, 10)
+      : value;
+    setFormData({ ...formData, [name]: next });
   };
 
   const handleFormSubmit = async (e) => {
@@ -104,7 +109,7 @@ export default function WorkshopRegistration({ workshop }) {
 
           <div className={styles.inputGroup}>
             <label htmlFor="phone">Phone No.</label>
-            <input type="tel" id="phone" name="phone" required value={formData.phone} onChange={handleInputChange} placeholder="e.g. +91 99999 99999" />
+            <input type="tel" id="phone" name="phone" inputMode="numeric" maxLength={10} required value={formData.phone} onChange={handleInputChange} placeholder="10-digit mobile number" />
           </div>
 
           <div className={styles.inputGroup}>
