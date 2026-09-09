@@ -7,8 +7,9 @@ export function generateStaticParams() {
   return instructorsList.map((m) => ({ slug: m.slug }));
 }
 
-// Only the slugs above are valid; anything else 404s in the static export.
-export const dynamicParams = false;
+// Admin-managed mentors use their own ids as slugs, so allow any slug — the
+// client resolves it from the API (falling back to the static bundle).
+export const dynamicParams = true;
 
 export default function Page() {
   return <MentorDetailClient />;

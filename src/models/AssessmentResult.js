@@ -1,18 +1,55 @@
 import mongoose from "mongoose";
 
-// A student's score for one attempt of an MCQ assessment / quiz.
+const AnswerSchema = new mongoose.Schema(
+  { question: { type: String, default: "" }, answer: { type: String, default: "" } },
+  { _id: false }
+);
+
+// One graded question: question text, max marks, and awarded marks.
+const GradeSchema = new mongoose.Schema(
+  { question: { type: String, default: "" }, maxMarks: { type: Number, default: 0 }, marks: { type: Number, default: 0 } },
+  { _id: false }
+);
+
+// A student's result for one assessment — holds the MCQ (auto), Written
+// (admin-graded) and Interview (interviewer-graded) scores separately.
+// Also used by course quizzes (type "Quiz") which only fill the MCQ fields.
 const AssessmentResultSchema = new mongoose.Schema({
   studentId: { type: String, default: "" },
   studentName: { type: String, default: "" },
   assessmentId: { type: String, default: "" },
   assessmentTitle: { type: String, default: "" },
   course: { type: String, default: "" },
-  type: { type: String, default: "MCQ" }, // MCQ | Quiz
-  score: { type: Number, default: 0 },     // correct answers
-  total: { type: Number, default: 0 },     // total questions
+  type: { type: String, default: "MCQ" }, // "MCQ" | "Quiz" | "Assessment"
+
+  // ── MCQ (auto-scored) — legacy score/total/percentage kept for quizzes ──
+  score: { type: Number, default: 0 },
+  total: { type: Number, default: 0 },
   percentage: { type: Number, default: 0 },
   passed: { type: Boolean, default: false },
+  mcqScore: { type: Number, default: 0 },
+  mcqTotal: { type: Number, default: 0 },
+  mcqPercentage: { type: Number, default: 0 },
+  mcqDone: { type: Boolean, default: false },
+
+  // ── Written / return exam ──
+  writtenAnswers: { type: [AnswerSchema], default: [] }, // student submission
+  writtenSubmitted: { type: Boolean, default: false },
+  writtenBreakdown: { type: [GradeSchema], default: [] }, // admin grading
+  writtenScore: { type: Number, default: 0 },
+  writtenTotal: { type: Number, default: 0 },
+  writtenGraded: { type: Boolean, default: false },
+
+  // ── Live Interview ──
+  interviewBreakdown: { type: [GradeSchema], default: [] }, // interviewer grading
+  interviewScore: { type: Number, default: 0 },
+  interviewTotal: { type: Number, default: 0 },
+  interviewGraded: { type: Boolean, default: false },
+
   createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
 });
 
-export default mongoose.models.AssessmentResult || mongoose.model("AssessmentResult", AssessmentResultSchema);
+if (mongoose.models.AssessmentResult) delete mongoose.models.AssessmentResult;
+
+export default mongoose.model("AssessmentResult", AssessmentResultSchema);

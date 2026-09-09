@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockAssessments } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { buildAssessmentDoc } from "@/lib/assessmentFields";
 import Assessment from "@/models/Assessment";
 
 export const runtime = "nodejs";
@@ -18,19 +19,8 @@ export async function PUT(request, { params }) {
   if (guard.error) return guard.error;
   const { id } = await params;
   const b = await request.json().catch(() => ({}));
-
-  const patch = {};
-  for (const f of ["title", "course", "description", "interviewDate", "interviewTime", "interviewLink", "interviewer"]) {
-    if (b[f] != null) patch[f] = String(b[f]).trim();
-  }
-  if (b.type != null) patch.type = b.type === "Live Interview" ? "Live Interview" : "MCQ";
-  if (b.status != null) patch.status = b.status === "Inactive" ? "Inactive" : "Active";
-  if (b.passingScore != null) patch.passingScore = Number(b.passingScore) || 0;
-  if (Array.isArray(b.questions)) {
-    patch.questions = b.questions
-      .filter((q) => (q.question || "").trim() && (q.options || []).some((o) => (o || "").trim()))
-      .map((q) => ({ question: q.question, options: q.options || [], correctIndex: q.correctIndex || 0 }));
-  }
+  const patch = buildAssessmentDoc(b);
+  if (!patch.title) return NextResponse.json({ error: "Title is required" }, { status: 400 });
 
   const useMock = await resolveUseMock();
   if (useMock) {

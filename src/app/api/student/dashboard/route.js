@@ -93,12 +93,16 @@ export async function GET(request) {
       total: r.total || 0,
       percentage: r.percentage || 0,
       passed: !!r.passed,
+      // Combined-assessment sub-scores (shown separately on the dashboard).
+      mcqDone: !!r.mcqDone, mcqScore: r.mcqScore || 0, mcqTotal: r.mcqTotal || 0, mcqPercentage: r.mcqPercentage || 0,
+      writtenGraded: !!r.writtenGraded, writtenScore: r.writtenScore || 0, writtenTotal: r.writtenTotal || 0, writtenSubmitted: !!r.writtenSubmitted,
+      interviewGraded: !!r.interviewGraded, interviewScore: r.interviewScore || 0, interviewTotal: r.interviewTotal || 0,
       createdAt: r.createdAt,
     });
   }
-  const avgScore = results.length
-    ? Math.round(results.reduce((n, r) => n + (r.percentage || 0), 0) / results.length)
-    : 0;
+  // Average across quiz percentages (assessment sub-scores are shown separately).
+  const quizPct = results.filter((r) => r.type !== "Assessment").map((r) => r.percentage || 0);
+  const avgScore = quizPct.length ? Math.round(quizPct.reduce((n, p) => n + p, 0) / quizPct.length) : 0;
 
   return NextResponse.json({
     student: { name: auth.name || "Student" },

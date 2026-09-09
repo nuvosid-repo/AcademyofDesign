@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -10,6 +10,16 @@ import {
 import styles from "@/components/Instructors/Instructors.module.scss";
 import instructorsList from "@/data/instructors.json";
 import courseCategories from "@/data/courses.json";
+
+// Convert a YouTube / Vimeo / direct URL into an iframe-embeddable URL.
+function toEmbed(url) {
+  if (!url) return "";
+  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
+  const vimeo = url.match(/vimeo\.com\/(\d+)/);
+  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
+  return url;
+}
 
 // Flat lookup of every course by id so we can enrich a mentor's course links
 // with the real image, duration and level.
@@ -24,10 +34,19 @@ export default function MentorDetailClient() {
   const { slug } = useParams();
   const [openIdx, setOpenIdx] = useState(0);
 
-  const mentor = useMemo(
-    () => instructorsList.find((m) => m.slug === slug),
-    [slug]
-  );
+  // Fetch the admin-managed mentor; fall back to the static bundle by slug.
+  const [mentor, setMentor] = useState(null);
+  const [resolved, setResolved] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/public/instructors/${slug}/`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => { if (!cancelled) { setMentor(d.instructor); setResolved(true); } })
+      .catch(() => { if (!cancelled) { setMentor(instructorsList.find((m) => m.slug === slug) || null); setResolved(true); } });
+    return () => { cancelled = true; };
+  }, [slug]);
+
+  if (!resolved) return <div className={styles.pageWrapper} />;
 
   if (!mentor) {
     return (
@@ -196,7 +215,7 @@ export default function MentorDetailClient() {
                 className={styles.videoFrame}
               >
                 <iframe
-                  src={mentor.videoUrl}
+                  src={toEmbed(mentor.videoUrl)}
                   title={`${mentor.name} — intro`}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen

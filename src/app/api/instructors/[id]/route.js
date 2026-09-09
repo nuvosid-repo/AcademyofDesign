@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockInstructors } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { buildInstructorDoc } from "@/lib/instructorFields";
 import Instructor from "@/models/Instructor";
 
 export const runtime = "nodejs";
@@ -18,10 +19,9 @@ export async function PUT(request, { params }) {
   if (guard.error) return guard.error;
   const { id } = await params;
   const b = await request.json().catch(() => ({}));
-
-  const patch = {};
-  for (const f of ["name", "designation", "url", "image", "status"]) {
-    if (b[f] != null) patch[f] = typeof b[f] === "string" ? b[f].trim() : b[f];
+  const patch = buildInstructorDoc(b);
+  if (!patch.name || !patch.designation) {
+    return NextResponse.json({ error: "Name and designation are required" }, { status: 400 });
   }
 
   const useMock = await resolveUseMock();

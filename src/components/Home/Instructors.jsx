@@ -1,16 +1,25 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/dist/ScrollTrigger";
 import Image from "next/image";
 import Link from "next/link";
 import styles from "./Instructors.module.scss";
-import instructors from "../../data/instructors.json";
+import staticInstructors from "../../data/instructors.json";
 
 export default function Instructors() {
   const containerRef = useRef(null);
   const sliderRef = useRef(null);
   const tweenRef = useRef(null);
+
+  // Admin-managed instructors; falls back to the static bundle when none exist.
+  const [instructors, setInstructors] = useState(staticInstructors);
+  useEffect(() => {
+    fetch("/api/public/instructors/", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => { if (Array.isArray(d.instructors) && d.instructors.length) setInstructors(d.instructors); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
@@ -49,7 +58,7 @@ export default function Instructors() {
     }, containerRef);
 
     return () => ctx.revert();
-  }, []);
+  }, [instructors]);
 
   // Triple the data to ensure seamless looping
   const tripleInstructors = [...instructors, ...instructors, ...instructors];

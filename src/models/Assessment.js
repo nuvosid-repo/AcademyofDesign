@@ -10,26 +10,47 @@ const QuestionSchema = new mongoose.Schema(
   { _id: false }
 );
 
-// An assessment attached to a course. Completing all of a course's assessments
-// (one MCQ + one Live Interview) makes the student eligible for the certificate.
+// A manually-marked question (written exam / interview): text + max marks.
+const MarkedQuestionSchema = new mongoose.Schema(
+  {
+    question: { type: String, default: "" },
+    maxMarks: { type: Number, default: 10 },
+  },
+  { _id: false }
+);
+
+// An assessment attached to a course. It can combine up to three sections:
+// MCQ (auto-scored), Written / return exam (admin-graded), and Live Interview
+// (interviewer-graded). Completing them contributes to the student's score.
 const AssessmentSchema = new mongoose.Schema({
   title: { type: String, required: [true, "Please provide a title"], trim: true },
   course: { type: String, default: "" }, // course title
-  type: { type: String, enum: ["MCQ", "Live Interview"], default: "MCQ" },
   description: { type: String, default: "" },
+  type: { type: String, default: "MCQ" }, // legacy; the combined flow uses the flags below
 
-  // MCQ assessment
-  questions: { type: [QuestionSchema], default: [] },
+  // ── MCQ section (auto-scored) ──
+  mcqEnabled: { type: Boolean, default: false },
+  questions: { type: [QuestionSchema], default: [] }, // MCQ questions
   passingScore: { type: Number, default: 0 }, // % needed to pass
 
-  // Live Interview assessment
+  // ── Written / return exam section (admin-graded) ──
+  writtenEnabled: { type: Boolean, default: false },
+  writtenQuestions: { type: [MarkedQuestionSchema], default: [] },
+
+  // ── Live Interview section (interviewer-graded) ──
+  interviewEnabled: { type: Boolean, default: false },
   interviewDate: { type: String, default: "" }, // yyyy-mm-dd
   interviewTime: { type: String, default: "" }, // HH:mm
   interviewLink: { type: String, default: "" },
   interviewer: { type: String, default: "" },
+  interviewQuestions: { type: [MarkedQuestionSchema], default: [] },
 
   status: { type: String, enum: ["Active", "Inactive"], default: "Active" },
   createdAt: { type: Date, default: Date.now },
 });
 
-export default mongoose.models.Assessment || mongoose.model("Assessment", AssessmentSchema);
+// Drop any previously-compiled model so schema changes take effect on dev
+// hot-reload (Next.js otherwise keeps the old compiled model).
+if (mongoose.models.Assessment) delete mongoose.models.Assessment;
+
+export default mongoose.model("Assessment", AssessmentSchema);

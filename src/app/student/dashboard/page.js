@@ -335,61 +335,40 @@ export default function StudentDashboard() {
       <div className="grid lg:grid-cols-3 gap-4 mt-4 items-start">
         <LiveClassCalendar liveClasses={data?.liveClasses || []} />
 
-        {/* My scores */}
+        {/* My scores — quiz scores only (score only, no titles) */}
         <div className="pf-card p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold flex items-center gap-2">
-              <Trophy size={17} className="text-[#db254f]" /> My Scores
-            </h3>
-            {data?.results?.length > 0 && (
-              <span className="text-sm">
-                <span className="pf-muted">Avg </span>
-                <span className="font-extrabold text-[#db254f]">
-                  {data.avgScore}%
-                </span>
-              </span>
-            )}
-          </div>
-          {loading ? (
-            <p className="pf-muted text-sm">Loading…</p>
-          ) : data?.results?.length ? (
-            <div className="space-y-2.5">
-              {data.results.slice(0, 4).map((r) => (
-                <div
-                  key={r.id}
-                  className="flex items-center justify-between gap-2 rounded-xl border pf-border p-3"
-                >
-                  <div className="min-w-0">
-                    <div className="font-semibold text-sm truncate">
-                      {r.assessmentTitle}
-                    </div>
-                    <div className="text-xs pf-muted mt-0.5 truncate">
-                      {r.type} · {r.score}/{r.total}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-lg font-extrabold">
-                      {r.percentage}%
-                    </span>
-                    <span
-                      className={`text-[11px] px-2 py-0.5 rounded-md font-medium ${r.passed ? "bg-emerald-500/15 text-emerald-500" : "bg-rose-500/15 text-rose-500"}`}
-                    >
-                      {r.passed ? "Pass" : "Fail"}
-                    </span>
-                  </div>
+          {(() => {
+            const qr = (data?.results || []).filter((r) => r.type !== "Assessment");
+            const avg = qr.length ? Math.round(qr.reduce((n, r) => n + (r.percentage || 0), 0) / qr.length) : 0;
+            return (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold flex items-center gap-2"><Trophy size={17} className="text-[#db254f]" /> My Scores</h3>
+                  {qr.length > 0 && <span className="text-sm"><span className="pf-muted">Avg </span><span className="font-extrabold text-[#db254f]">{avg}%</span></span>}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-5">
-              <div className="w-11 h-11 rounded-xl pf-chip flex items-center justify-center mx-auto mb-2.5">
-                <Trophy size={20} />
-              </div>
-              <p className="pf-muted text-sm">
-                No scores yet. Complete an assessment to see them here.
-              </p>
-            </div>
-          )}
+                {loading ? (
+                  <p className="pf-muted text-sm">Loading…</p>
+                ) : qr.length ? (
+                  <div className="space-y-2.5">
+                    {qr.slice(0, 6).map((r) => (
+                      <div key={r.id} className="flex items-center justify-between gap-2 rounded-xl border pf-border p-3">
+                        <span className="text-xs pf-muted truncate min-w-0">{r.course || "Quiz"}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-lg font-extrabold">{r.percentage}%</span>
+                          <span className={`text-[11px] px-2 py-0.5 rounded-md font-medium ${r.passed ? "bg-emerald-500/15 text-emerald-500" : "bg-rose-500/15 text-rose-500"}`}>{r.passed ? "Pass" : "Fail"}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-5">
+                    <div className="w-11 h-11 rounded-xl pf-chip flex items-center justify-center mx-auto mb-2.5"><Trophy size={20} /></div>
+                    <p className="pf-muted text-sm">No quiz scores yet.</p>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
 
         {/* Upcoming live classes */}

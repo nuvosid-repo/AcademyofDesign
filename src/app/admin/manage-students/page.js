@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Pencil, Trash2, Eye, EyeOff, Upload, GraduationCap, X } from "lucide-react";
+import { Pencil, Trash2, Eye, EyeOff, Upload, GraduationCap, X, BookOpen, Plus } from "lucide-react";
 import AdminShell from "@/components/portal/AdminShell";
 import { useConfirm } from "@/components/portal/ConfirmDialog";
 import { DatePicker } from "@/components/portal/DateTimePicker";
@@ -38,6 +38,13 @@ export default function ManageStudentsPage() {
   const [search, setSearch] = useState("");
   const [pageSize, setPageSize] = useState(50);
 
+  // Assign-course modal
+  const [courses, setCourses] = useState([]);
+  const [assignFor, setAssignFor] = useState(null);
+  const [assignCourseId, setAssignCourseId] = useState("");
+  const [assigning, setAssigning] = useState(false);
+  const [assignError, setAssignError] = useState("");
+
   const load = () =>
     apiFetch("/api/manage-students", { cache: "no-store" })
       .then((r) => r.json())
@@ -45,7 +52,39 @@ export default function ManageStudentsPage() {
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    apiFetch("/api/courses", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setCourses((d.courses || []).map((c) => ({ id: c.id, title: c.title }))))
+      .catch(() => setCourses([]));
+  }, []);
+
+  // Keep the assign modal's student in sync with the latest list after a change.
+  const openAssign = (s) => { setAssignFor(s); setAssignCourseId(""); setAssignError(""); };
+
+  const assignCourse = async () => {
+    if (!assignCourseId) { setAssignError("Please select a course"); return; }
+    setAssigning(true); setAssignError("");
+    try {
+      const res = await apiFetch("/api/enrollments/assign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentId: assignFor.id, courseId: assignCourseId }) });
+      const d = await res.json();
+      if (!res.ok) { setAssignError(d.error || "Failed to assign"); return; }
+      setAssignCourseId("");
+      const students = await apiFetch("/api/manage-students", { cache: "no-store" }).then((r) => r.json()).then((x) => x.students || []).catch(() => items);
+      setItems(students);
+      setAssignFor(students.find((x) => x.id === assignFor.id) || assignFor);
+    } finally { setAssigning(false); }
+  };
+
+  const unassignCourse = async (courseTitle) => {
+    const ok = await confirmDialog({ title: "Remove course?", text: `Remove "${courseTitle}" from this student?` });
+    if (!ok) return;
+    await apiFetch(`/api/enrollments/assign?studentId=${encodeURIComponent(assignFor.id)}&courseTitle=${encodeURIComponent(courseTitle)}`, { method: "DELETE" }).catch(() => {});
+    const students = await apiFetch("/api/manage-students", { cache: "no-store" }).then((r) => r.json()).then((x) => x.students || []).catch(() => items);
+    setItems(students);
+    setAssignFor(students.find((x) => x.id === assignFor.id) || assignFor);
+  };
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -286,6 +325,7 @@ export default function ManageStudentsPage() {
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         <button onClick={() => setViewing(s)} title="View" className="w-8 h-8 rounded-full btn-pill bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center"><Eye size={14} /></button>
+                        <button onClick={() => openAssign(s)} title="Assign course" className="w-8 h-8 rounded-full btn-pill bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center"><BookOpen size={14} /></button>
                         <button onClick={() => editItem(s)} title="Edit" className="w-8 h-8 rounded-full btn-pill bg-[#db254f] hover:bg-[#b91d40] text-white flex items-center justify-center"><Pencil size={14} /></button>
                         <button onClick={() => deleteItem(s.id)} title="Delete" className="w-8 h-8 rounded-full btn-pill bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center"><Trash2 size={14} /></button>
                       </div>
@@ -363,6 +403,58 @@ export default function ManageStudentsPage() {
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
               <button onClick={() => { const s = viewing; setViewing(null); editItem(s); }} className="rounded-full btn-pill bg-[#db254f] hover:bg-[#b91d40] text-white text-sm font-semibold px-6 py-2 transition">Edit</button>
               <button onClick={() => setViewing(null)} className="text-sm text-gray-500 hover:text-gray-800">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Assign Course modal ---- */}
+      {assignFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setAssignFor(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-rose-50/60 to-transparent">
+              <div className="flex items-center gap-3">
+                <span className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center"><BookOpen size={18} /></span>
+                <div>
+                  <h2 className="font-bold text-gray-900 leading-tight">Assign Course</h2>
+                  <p className="text-xs text-gray-500">{assignFor.name} · {assignFor.email}</p>
+                </div>
+              </div>
+              <button onClick={() => setAssignFor(null)} className="w-8 h-8 rounded-full hover:bg-gray-100 text-gray-500 flex items-center justify-center"><X size={18} /></button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {assignError && <div className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{assignError}</div>}
+
+              <div>
+                <label className={label}>Add a course</label>
+                <div className="flex gap-2">
+                  <select className={field} value={assignCourseId} onChange={(e) => setAssignCourseId(e.target.value)}>
+                    <option value="">--Select course--</option>
+                    {courses.filter((c) => !(assignFor.enrolledCourses || []).includes(c.title)).map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+                  </select>
+                  <button onClick={assignCourse} disabled={assigning} className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2.5 disabled:opacity-60 transition"><Plus size={15} /> {assigning ? "…" : "Assign"}</button>
+                </div>
+                <p className="text-xs text-gray-400 mt-1.5">Assigning enrolls the student instantly — it appears in their My Courses & dashboard.</p>
+              </div>
+
+              <div>
+                <div className="text-xs uppercase tracking-wide text-gray-400 mb-2">Enrolled Courses {assignFor.enrolledCount > 0 ? `(${assignFor.enrolledCount})` : ""}</div>
+                {(assignFor.enrolledCourses || []).length > 0 ? (
+                  <div className="space-y-2">
+                    {assignFor.enrolledCourses.map((c) => (
+                      <div key={c} className="flex items-center justify-between gap-2 rounded-xl border border-gray-200 px-3 py-2">
+                        <span className="text-sm text-gray-800 flex items-center gap-2"><BookOpen size={14} className="text-emerald-500" /> {c}</span>
+                        <button onClick={() => unassignCourse(c)} title="Remove" className="w-7 h-7 rounded-full hover:bg-rose-50 text-gray-400 hover:text-rose-500 flex items-center justify-center"><Trash2 size={14} /></button>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="text-sm text-gray-400">Not enrolled in any course yet.</p>}
+              </div>
+            </div>
+
+            <div className="flex justify-end px-6 py-4 border-t border-gray-100">
+              <button onClick={() => setAssignFor(null)} className="text-sm text-gray-500 hover:text-gray-800">Close</button>
             </div>
           </div>
         </div>

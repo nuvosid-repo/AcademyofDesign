@@ -1,12 +1,22 @@
 "use client";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { ArrowRight, GraduationCap } from "lucide-react";
 import styles from "./Instructors.module.scss";
 
-import instructorsList from "../../data/instructors.json";
+import staticInstructors from "../../data/instructors.json";
 
 export default function InstructorsShowcase() {
+  // Admin-managed instructors; falls back to the static bundle when none exist.
+  const [instructorsList, setInstructorsList] = useState(staticInstructors);
+  useEffect(() => {
+    fetch("/api/public/instructors/", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => { if (Array.isArray(d.instructors) && d.instructors.length) setInstructorsList(d.instructors); })
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="row g-4 g-lg-4 mt-2">
       {instructorsList.map((ins, idx) => (
