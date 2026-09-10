@@ -29,8 +29,9 @@ export async function GET(request, { params }) {
   const enrollments = useMock
     ? mockEnrollments().filter((e) => e.studentId === auth.id)
     : await Enrollment.find({ studentId: auth.id }).lean();
-  const enrolled = enrollments.some((e) => e.courseId === cid || (e.courseTitle && e.courseTitle === course.title));
-  if (!enrolled) return NextResponse.json({ error: "You are not enrolled in this course" }, { status: 403 });
+  const myEnroll = enrollments.find((e) => e.courseId === cid || (e.courseTitle && e.courseTitle === course.title));
+  if (!myEnroll) return NextResponse.json({ error: "You are not enrolled in this course" }, { status: 403 });
+  const completedVideos = Array.isArray(myEnroll.completedVideos) ? myEnroll.completedVideos : [];
 
   const base = `/api/student/courses/${cid}`;
 
@@ -88,5 +89,6 @@ export async function GET(request, { params }) {
       lessons: course.lessons || "",
     },
     curriculum,
+    progress: { completedVideos },
   });
 }

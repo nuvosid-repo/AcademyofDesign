@@ -10,7 +10,12 @@ const EnrollmentSchema = new mongoose.Schema({
   studentEmail: { type: String, default: "" },
   amount: { type: Number, default: 0 }, // paise
   paymentId: { type: String, default: "" },
+  // Progressive unlock: keys of completed videos, each `${classIndex}:${videoIndex}`.
+  completedVideos: { type: [String], default: [] },
   createdAt: { type: Date, default: Date.now },
 });
 
-export default mongoose.models.Enrollment || mongoose.model("Enrollment", EnrollmentSchema);
+// Force a fresh schema on hot-reload so newly added fields (completedVideos)
+// aren't silently stripped by a stale compiled model.
+if (mongoose.models.Enrollment) delete mongoose.models.Enrollment;
+export default mongoose.model("Enrollment", EnrollmentSchema);

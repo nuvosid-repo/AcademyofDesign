@@ -123,6 +123,13 @@ p, .desc, .description, .subtitle, [class*="desc"], [class*="description"], [cla
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
+/* Thin, theme-aware scrollbar for capped dashboard lists. */
+.pf-scroll { scrollbar-width: thin; scrollbar-color: rgba(var(--fg-rgb,0,0,0),0.22) transparent; }
+.pf-scroll::-webkit-scrollbar { width: 6px; }
+.pf-scroll::-webkit-scrollbar-track { background: transparent; }
+.pf-scroll::-webkit-scrollbar-thumb { background: rgba(var(--fg-rgb,0,0,0),0.18); border-radius: 9999px; }
+.pf-scroll::-webkit-scrollbar-thumb:hover { background: rgba(var(--fg-rgb,0,0,0),0.32); }
+
 /* Bootstrap zeroes <button> radius; restore rounding for buttons inside the
    date/time picker popup (calendar days, time pills, nav arrows). */
 .dtp button { border-radius: 0.5rem; }

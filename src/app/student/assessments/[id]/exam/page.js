@@ -1,0 +1,373 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import {
+  HelpCircle, FileText, CheckCircle2, ArrowRight, ArrowLeft, Clock,
+  ShieldAlert, Loader2, ClipboardCheck, Ban,
+} from "lucide-react";
+import { apiFetch } from "@/lib/api";
+
+const EXAM_MINUTES = 30; // TODO: make configurable per assessment later.
+
+const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+export default function ExamPage() {
+  const { id } = useParams();
+  const router = useRouter();
+
+  const [assessment, setAssessment] = useState(null);
+  // loading | error | blocked | instructions | mcq | written | submitting | done
+  const [phase, setPhase] = useState("loading");
+  const [err, setErr] = useState("");
+
+  const [mcqAnswers, setMcqAnswers] = useState({});
+  const [mcqIndex, setMcqIndex] = useState(0);
+  const [mcqResult, setMcqResult] = useState(null);
+  const mcqSubmittedRef = useRef(false);
+
+  const [writtenAnswers, setWrittenAnswers] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+
+  const [timeLeft, setTimeLeft] = useState(EXAM_MINUTES * 60);
+  const [warnings, setWarnings] = useState(0);
+  const [showWarn, setShowWarn] = useState(false);
+
+  const inExam = phase === "mcq" || phase === "written";
+
+  /* ── Load the assessment ── */
+  useEffect(() => {
+    apiFetch("/api/student/assessments", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        const a = (d.assessments || []).find((x) => x.id === id);
+        if (!a) { setErr("Assessment not found."); setPhase("error"); return; }
+        if (!a.mcqEnabled && !a.writtenEnabled) { setErr("This assessment has no written or MCQ exam."); setPhase("error"); return; }
+        setAssessment(a);
+        const examDone = (!a.mcqEnabled || a.mcqDone) && (!a.writtenEnabled || a.writtenSubmitted);
+        setPhase(examDone ? "blocked" : "instructions");
+      })
+      .catch(() => { setErr("Failed to load the assessment."); setPhase("error"); });
+  }, [id]);
+
+  /* ── Countdown timer (runs only during the exam) ── */
+  useEffect(() => {
+    if (!inExam) return;
+    const t = setInterval(() => {
+      setTimeLeft((s) => {
+        if (s <= 1) { clearInterval(t); handleTimeout(); return 0; }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inExam]);
+
+  /* ── Anti-cheat: warn on tab switch / window blur ── */
+  useEffect(() => {
+    if (!inExam) return;
+    const warn = () => { setWarnings((w) => w + 1); setShowWarn(true); };
+    const onVis = () => { if (document.hidden) warn(); };
+    window.addEventListener("blur", warn);
+    document.addEventListener("visibilitychange", onVis);
+    return () => { window.removeEventListener("blur", warn); document.removeEventListener("visibilitychange", onVis); };
+  }, [inExam]);
+
+  /* ── Warn before closing/reloading during the exam ── */
+  useEffect(() => {
+    if (!inExam) return;
+    const before = (e) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", before);
+    return () => window.removeEventListener("beforeunload", before);
+  }, [inExam]);
+
+  /* ── Submit helpers ── */
+  const submitMcq = async () => {
+    if (mcqSubmittedRef.current || !assessment?.mcqEnabled) return true;
+    const qs = assessment.mcqQuestions || [];
+    try {
+      const res = await apiFetch(`/api/student/assessments/${id}/mcq`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers: qs.map((_, i) => (mcqAnswers[i] ?? -1)) }),
+      });
+      const d = await res.json();
+      if (res.ok) { mcqSubmittedRef.current = true; setMcqResult(d); return true; }
+    } catch { /* noop */ }
+    return false;
+  };
+
+  const submitWritten = async () => {
+    if (!assessment?.writtenEnabled) return true;
+    const qs = assessment.writtenQuestions || [];
+    try {
+      const res = await apiFetch(`/api/student/assessments/${id}/written`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers: qs.map((_, i) => (writtenAnswers[i] || "")) }),
+      });
+      return res.ok;
+    } catch { return false; }
+  };
+
+  /* ── Flow transitions ── */
+  const startExam = () => setPhase(assessment.mcqEnabled ? "mcq" : "written");
+
+  const afterMcq = async () => {
+    setSubmitting(true);
+    const ok = await submitMcq();
+    setSubmitting(false);
+    if (!ok) { setErr("Could not submit your MCQ answers. Please try again."); return; }
+    if (assessment.writtenEnabled) setPhase("written");
+    else finishAll();
+  };
+
+  const finishAll = async () => {
+    setPhase("submitting");
+    await submitMcq();
+    await submitWritten();
+    setPhase("done");
+  };
+
+  const handleTimeout = async () => {
+    setPhase("submitting");
+    await submitMcq();
+    await submitWritten();
+    setPhase("done");
+  };
+
+  /* ── Shells ── */
+  const Screen = ({ children, narrow }) => (
+    <div className="pf-page min-h-screen w-full flex flex-col">
+      <div className={`flex-1 w-full mx-auto px-4 py-6 sm:py-10 ${narrow ? "max-w-2xl" : "max-w-3xl"}`}>{children}</div>
+    </div>
+  );
+
+  if (phase === "loading") return (
+    <div className="pf-page min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#db254f]" size={28} /></div>
+  );
+
+  if (phase === "error") return (
+    <Screen narrow>
+      <div className="pf-card p-8 text-center">
+        <div className="w-12 h-12 rounded-2xl pf-chip flex items-center justify-center mx-auto mb-3"><Ban size={22} /></div>
+        <p className="pf-muted">{err}</p>
+        <button onClick={() => router.push("/student/assessments")} className="btn-pill mt-4 inline-flex items-center gap-1.5 text-sm font-semibold border pf-border px-4 py-2 pf-hover"><ArrowLeft size={14} /> Back to Assessments</button>
+      </div>
+    </Screen>
+  );
+
+  if (phase === "blocked") return (
+    <Screen narrow>
+      <div className="pf-card p-8 text-center">
+        <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 text-emerald-500" style={{ background: "rgba(16,185,129,0.15)" }}><CheckCircle2 size={26} /></div>
+        <h2 className="text-xl font-extrabold">Exam already completed</h2>
+        <p className="pf-muted mt-2 text-sm">You have already submitted this assessment. You can now proceed to the live interview from the Assessments page.</p>
+        <button onClick={() => router.push("/student/assessments")} className="btn-pill mt-5 inline-flex items-center gap-1.5 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-5 py-2.5 transition"><ArrowLeft size={14} /> Back to Assessments</button>
+      </div>
+    </Screen>
+  );
+
+  /* ── Instructions ── */
+  if (phase === "instructions") {
+    const rules = [
+      { icon: Clock, text: `You have ${EXAM_MINUTES} minutes to complete the exam. The timer starts as soon as you begin and cannot be paused.` },
+      ...(assessment.mcqEnabled ? [{ icon: HelpCircle, text: `Section 1 — MCQ: ${assessment.mcqCount} question${assessment.mcqCount !== 1 ? "s" : ""}, one at a time. Passing score ${assessment.passingScore}%.` }] : []),
+      ...(assessment.writtenEnabled ? [{ icon: FileText, text: `Section 2 — Written: ${assessment.writtenQuestions.length} question${assessment.writtenQuestions.length !== 1 ? "s" : ""}. Type your answers — copy & paste is disabled.` }] : []),
+      { icon: ShieldAlert, text: "Do not switch tabs or leave this window — it will be flagged. Your exam is submitted automatically when the time runs out." },
+    ];
+    return (
+      <Screen>
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-4 text-white shadow-lg shadow-rose-500/30" style={{ background: "linear-gradient(135deg, #db254f, #e56b85)" }}><ClipboardCheck size={30} /></div>
+          <p className="text-xs uppercase tracking-wide text-[#db254f] font-bold">{assessment.course}</p>
+          <h1 className="text-2xl font-extrabold mt-1">{assessment.title}</h1>
+          {assessment.description && <p className="pf-muted mt-2 text-sm max-w-xl mx-auto">{assessment.description}</p>}
+        </div>
+        <div className="pf-card p-6">
+          <h2 className="font-bold text-lg mb-4">Exam Instructions</h2>
+          <div className="space-y-3.5">
+            {rules.map(({ icon: Icon, text }, i) => (
+              <div key={i} className="flex items-start gap-3">
+                <span className="w-8 h-8 rounded-lg pf-chip flex items-center justify-center shrink-0"><Icon size={16} className="text-[#db254f]" /></span>
+                <p className="text-sm pf-muted leading-relaxed pt-1">{text}</p>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-between gap-3 mt-6 pt-5 border-t pf-border">
+            <button onClick={() => router.push("/student/assessments")} className="btn-pill inline-flex items-center gap-1.5 text-sm font-semibold border pf-border px-4 py-2 pf-hover transition"><ArrowLeft size={14} /> Cancel</button>
+            <button onClick={startExam} className="btn-pill inline-flex items-center gap-2 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-6 py-3 shadow-md shadow-rose-500/30 transition">Start Exam <ArrowRight size={16} /></button>
+          </div>
+        </div>
+      </Screen>
+    );
+  }
+
+  /* ── Submitting ── */
+  if (phase === "submitting") return (
+    <div className="pf-page min-h-screen flex flex-col items-center justify-center gap-3">
+      <Loader2 className="animate-spin text-[#db254f]" size={30} />
+      <p className="pf-muted text-sm">Submitting your exam…</p>
+    </div>
+  );
+
+  /* ── Done ── */
+  if (phase === "done") return (
+    <Screen narrow>
+      <div className="pf-card p-8 text-center">
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-500" style={{ background: "rgba(16,185,129,0.15)" }}><CheckCircle2 size={30} /></div>
+        <h2 className="text-2xl font-extrabold">Exam submitted 🎉</h2>
+        <p className="pf-muted mt-2 text-sm">Your responses have been recorded.</p>
+        <div className="grid gap-3 mt-6 text-left">
+          {assessment.mcqEnabled && mcqResult && (
+            <div className="rounded-xl border pf-border p-4 flex items-center justify-between">
+              <span className="text-sm font-semibold flex items-center gap-2"><HelpCircle size={15} className="text-[#db254f]" /> MCQ Score</span>
+              <span className="text-lg font-extrabold">{mcqResult.percentage}% <span className="text-sm pf-muted font-medium">({mcqResult.score}/{mcqResult.total})</span></span>
+            </div>
+          )}
+          {assessment.writtenEnabled && (
+            <div className="rounded-xl border pf-border p-4 flex items-center justify-between">
+              <span className="text-sm font-semibold flex items-center gap-2"><FileText size={15} className="text-[#db254f]" /> Written Exam</span>
+              <span className="text-sm text-amber-500 font-medium inline-flex items-center gap-1"><Clock size={13} /> Awaiting grading</span>
+            </div>
+          )}
+          {assessment.interviewEnabled && (
+            <div className="rounded-xl p-4 text-sm pf-muted" style={{ background: "rgba(99,102,241,0.10)" }}>
+              Next step: a <span className="font-semibold" style={{ color: "var(--fg)" }}>live interview</span>. Join it from the Assessments page when you are ready.
+            </div>
+          )}
+        </div>
+        <button onClick={() => router.push("/student/assessments")} className="btn-pill mt-6 inline-flex items-center gap-1.5 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-5 py-2.5 transition"><ArrowLeft size={14} /> Back to Assessments</button>
+      </div>
+    </Screen>
+  );
+
+  /* ── Live exam (MCQ / Written) with top bar ── */
+  const lowTime = timeLeft <= 120;
+  return (
+    <div className="pf-page min-h-screen w-full flex flex-col select-none">
+      {/* Top bar */}
+      <div className="sticky top-0 z-20 border-b pf-border" style={{ background: "var(--bg-elev, #fff)" }}>
+        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="font-bold text-sm truncate">{assessment.title}</div>
+            <div className="text-[11px] pf-faint">{phase === "mcq" ? "Section 1 · MCQ" : "Section 2 · Written"}</div>
+          </div>
+          <div className={`inline-flex items-center gap-1.5 font-bold text-sm px-3 py-1.5 rounded-full ${lowTime ? "text-white" : ""}`}
+            style={lowTime ? { background: "#db254f" } : { background: "rgba(var(--fg-rgb),0.06)" }}>
+            <Clock size={15} /> {fmtTime(timeLeft)}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 w-full max-w-3xl mx-auto px-4 py-6 sm:py-8">
+        {phase === "mcq" ? (
+          <McqSection assessment={assessment} answers={mcqAnswers} setAnswers={setMcqAnswers} index={mcqIndex} setIndex={setMcqIndex} onFinish={afterMcq} submitting={submitting} />
+        ) : (
+          <WrittenSection assessment={assessment} answers={writtenAnswers} setAnswers={setWrittenAnswers} onSubmit={finishAll} />
+        )}
+      </div>
+
+      {/* Anti-cheat warning overlay */}
+      {showWarn && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
+          <div className="pf-card p-7 max-w-sm w-full text-center">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 text-[#db254f]" style={{ background: "rgba(219,37,79,0.12)" }}><ShieldAlert size={28} /></div>
+            <h3 className="text-lg font-extrabold">Please complete your exam</h3>
+            <p className="pf-muted text-sm mt-2">Switching tabs or leaving the exam window is not allowed. This has been recorded (warning {warnings}).</p>
+            <button onClick={() => setShowWarn(false)} className="btn-pill mt-5 inline-flex items-center gap-1.5 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-5 py-2.5 transition">Resume Exam</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── MCQ, one question at a time ── */
+function McqSection({ assessment, answers, setAnswers, index, setIndex, onFinish, submitting }) {
+  const qs = assessment.mcqQuestions || [];
+  const total = qs.length;
+  const q = qs[index];
+  const answeredCount = Object.keys(answers).length;
+  const answeredCurrent = answers[index] != null;
+  const isLast = index === total - 1;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <span className="inline-flex items-center gap-2">
+          <span className="text-2xl font-extrabold text-[#db254f] leading-none">{String(index + 1).padStart(2, "0")}</span>
+          <span className="pf-faint text-sm font-medium">/ {String(total).padStart(2, "0")}</span>
+        </span>
+        <span className="text-xs font-semibold pf-chip px-3 py-1.5 rounded-full">{answeredCount}/{total} answered</span>
+      </div>
+      <div className="flex gap-1.5 mb-6">
+        {qs.map((_, i) => (
+          <button key={i} onClick={() => setIndex(i)} aria-label={`Question ${i + 1}`} className="flex-1 h-1.5 transition-all"
+            style={{ borderRadius: 9999, background: i === index ? "#db254f" : answers[i] != null ? "rgba(219,37,79,0.45)" : "rgba(var(--fg-rgb),0.1)" }} />
+        ))}
+      </div>
+
+      <p className="font-bold text-xl leading-snug mb-6">{q?.question}</p>
+      <div className="space-y-3">
+        {(q?.options || []).map((opt, oi) => {
+          const active = answers[index] === oi;
+          return (
+            <button key={oi} type="button" onClick={() => setAnswers((a) => ({ ...a, [index]: oi }))}
+              className="w-full flex items-center gap-4 border-2 px-4 py-4 text-left transition"
+              style={active
+                ? { borderRadius: "1rem", borderColor: "#db254f", background: "linear-gradient(90deg, rgba(219,37,79,0.14), rgba(229,107,133,0.05))" }
+                : { borderRadius: "1rem", borderColor: "rgba(var(--fg-rgb),0.1)" }}>
+              <span className={`w-11 h-11 flex items-center justify-center text-base font-extrabold shrink-0 transition ${active ? "text-white shadow-md shadow-rose-500/30" : "pf-faint"}`}
+                style={active ? { borderRadius: "0.75rem", background: "linear-gradient(135deg, #db254f, #e56b85)" } : { borderRadius: "0.75rem", background: "rgba(var(--fg-rgb),0.06)" }}>
+                {String.fromCharCode(65 + oi)}
+              </span>
+              <span className={`flex-1 ${active ? "font-semibold" : "font-medium"}`} style={{ color: "var(--fg)" }}>{opt}</span>
+              {active && <CheckCircle2 size={22} className="text-[#db254f] shrink-0" />}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center justify-between gap-3 mt-8 pt-5 border-t pf-border">
+        <button onClick={() => setIndex((c) => Math.max(0, c - 1))} disabled={index === 0}
+          className="btn-pill inline-flex items-center gap-1.5 text-sm font-semibold border pf-border px-4 py-2 pf-hover transition disabled:opacity-30 disabled:cursor-not-allowed"><ArrowLeft size={14} /> Back</button>
+        {isLast ? (
+          <button onClick={onFinish} disabled={submitting || answeredCount < total}
+            className="btn-pill inline-flex items-center gap-1.5 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-5 py-2.5 shadow-md shadow-rose-500/30 transition disabled:opacity-50">
+            {submitting ? "Submitting…" : (assessment.writtenEnabled ? "Continue to Written" : "Finish Exam")} <ArrowRight size={15} />
+          </button>
+        ) : (
+          <button onClick={() => setIndex((c) => Math.min(total - 1, c + 1))} disabled={!answeredCurrent}
+            className="btn-pill inline-flex items-center gap-1.5 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-5 py-2.5 shadow-md shadow-rose-500/30 transition disabled:opacity-40 disabled:cursor-not-allowed">Next <ArrowRight size={14} /></button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Written section — type only, no copy/paste ── */
+function WrittenSection({ assessment, answers, setAnswers, onSubmit }) {
+  const qs = assessment.writtenQuestions || [];
+  const block = (e) => e.preventDefault();
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-1"><FileText size={18} className="text-[#db254f]" /><h2 className="font-bold text-lg">Written Exam</h2></div>
+      <p className="pf-muted text-sm mb-5">Type your answers below. Copy &amp; paste is disabled — you must type your response. Your answers are graded by your instructor.</p>
+      <div className="space-y-5">
+        {qs.map((q, qi) => (
+          <div key={qi} className="pf-card p-4">
+            <p className="font-semibold text-sm mb-2.5"><span className="text-[#db254f]">Q{qi + 1}.</span> {q.question} <span className="pf-faint font-normal">({q.maxMarks} marks)</span></p>
+            <textarea rows={5}
+              className="w-full rounded-xl border pf-border bg-transparent px-3 py-2.5 text-sm outline-none focus:border-[#db254f] resize-y select-text"
+              placeholder="Type your answer here…"
+              value={answers[qi] || ""}
+              onChange={(e) => setAnswers((a) => ({ ...a, [qi]: e.target.value }))}
+              onPaste={block} onCopy={block} onCut={block} onDrop={block} onContextMenu={block} />
+            <p className="text-[11px] pf-faint mt-1.5 inline-flex items-center gap-1"><Ban size={11} /> Copy-paste disabled</p>
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-end mt-6">
+        <button onClick={onSubmit} className="btn-pill inline-flex items-center gap-2 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-6 py-3 shadow-md shadow-rose-500/30 transition">Submit Exam <CheckCircle2 size={16} /></button>
+      </div>
+    </div>
+  );
+}

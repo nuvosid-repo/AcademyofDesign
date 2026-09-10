@@ -1,24 +1,97 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, ArrowRight, BookOpen, PlayCircle, FileText, HelpCircle, ChevronDown, Clock,
-  Users, Download, CheckCircle2, Video as VideoIcon,
+  Users, Download, CheckCircle2, Video as VideoIcon, Lock, Check,
 } from "lucide-react";
 import StudentShell from "@/components/portal/StudentShell";
 import { apiFetch } from "@/lib/api";
 
-/* Resolve a video URL to an embeddable player. */
-function VideoEmbed({ url, title }) {
-  if (!url) return null;
-  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/);
-  const vimeo = url.match(/vimeo\.com\/(\d+)/);
+/* Lazy-load the YouTube IFrame API once (needed to detect when a video ends). */
+let ytPromise;
+function loadYT() {
+  if (typeof window === "undefined") return Promise.resolve(null);
+  if (window.YT && window.YT.Player) return Promise.resolve(window.YT);
+  if (!ytPromise) {
+    ytPromise = new Promise((resolve) => {
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube.com/iframe_api";
+      const prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => { prev?.(); resolve(window.YT); };
+      document.body.appendChild(tag);
+    });
+  }
+  return ytPromise;
+}
+
+/* Lazy-load the Vimeo Player SDK once (to detect the 'ended' event). */
+let vimeoPromise;
+function loadVimeo() {
+  if (typeof window === "undefined") return Promise.resolve(null);
+  if (window.Vimeo && window.Vimeo.Player) return Promise.resolve(window.Vimeo);
+  if (!vimeoPromise) {
+    vimeoPromise = new Promise((resolve) => {
+      const s = document.createElement("script");
+      s.src = "https://player.vimeo.com/api/player.js";
+      s.onload = () => resolve(window.Vimeo);
+      document.body.appendChild(s);
+    });
+  }
+  return vimeoPromise;
+}
+
+/* Embeddable player that reports completion via onComplete only once the
+   viewer has watched the whole video (YouTube/Vimeo 'ended' or <video> end). */
+function VideoEmbed({ url, title, onComplete }) {
+  const yt = url ? url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/) : null;
+  const vimeo = url ? url.match(/vimeo\.com\/(\d+)/) : null;
+  const isFile = /\.(mp4|webm|ogg)(\?|$)/i.test(url || "");
   const box = "w-full aspect-video rounded-xl overflow-hidden border pf-border bg-black";
-  if (yt) return <div className={box}><iframe src={`https://www.youtube.com/embed/${yt[1]}`} title={title} className="w-full h-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen /></div>;
-  if (vimeo) return <div className={box}><iframe src={`https://player.vimeo.com/video/${vimeo[1]}`} title={title} className="w-full h-full" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen /></div>;
-  if (/\.(mp4|webm|ogg)(\?|$)/i.test(url)) return <div className={box}><video src={url} controls className="w-full h-full" /></div>;
-  return <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-[#db254f] hover:underline"><PlayCircle size={15} /> Open video</a>;
+
+  const mountRef = useRef(null);
+  const doneRef = useRef(false);
+  // Keep the latest onComplete so player event handlers never fire a stale one.
+  const cbRef = useRef(onComplete);
+  useEffect(() => { cbRef.current = onComplete; });
+  const fire = () => { if (!doneRef.current) { doneRef.current = true; cbRef.current?.(); } };
+
+  // YouTube — needs the IFrame API to know when the video reaches the end.
+  useEffect(() => {
+    if (!yt) return;
+    let player, cancelled = false;
+    loadYT().then((YT) => {
+      if (cancelled || !YT || !mountRef.current) return;
+      player = new YT.Player(mountRef.current, {
+        width: "100%", height: "100%", videoId: yt[1],
+        playerVars: { rel: 0, modestbranding: 1 },
+        events: { onStateChange: (e) => { if (e.data === 0) fire(); } },
+      });
+    });
+    return () => { cancelled = true; try { player?.destroy?.(); } catch { /* noop */ } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url]);
+
+  // Vimeo — attach the SDK to the iframe and listen for 'ended'.
+  useEffect(() => {
+    if (!vimeo) return;
+    let player, cancelled = false;
+    loadVimeo().then((V) => {
+      if (cancelled || !V || !mountRef.current) return;
+      player = new V.Player(mountRef.current);
+      player.on("ended", fire);
+    });
+    return () => { cancelled = true; try { player?.off?.("ended"); } catch { /* noop */ } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url]);
+
+  if (!url) return null;
+  if (yt) return <div className={box}><div ref={mountRef} className="w-full h-full" /></div>;
+  if (vimeo) return <div className={box}><iframe ref={mountRef} src={`https://player.vimeo.com/video/${vimeo[1]}`} title={title} className="w-full h-full" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen /></div>;
+  if (isFile) return <div className={box}><video src={url} controls className="w-full h-full" onEnded={fire} /></div>;
+  // Non-embeddable link: can't track playback, so count opening it as viewed.
+  return <a href={url} target="_blank" rel="noreferrer" onClick={fire} className="inline-flex items-center gap-1.5 text-sm text-[#db254f] hover:underline"><PlayCircle size={15} /> Open video</a>;
 }
 
 /* Interactive MCQ quiz — modern exam-style, one question at a time. */
@@ -170,12 +243,15 @@ export default function CourseLearningPage() {
   const [openIdx, setOpenIdx] = useState(0);
   const [imgError, setImgError] = useState(false);
   const [currentVideo, setCurrentVideo] = useState(null);
+  const [completed, setCompleted] = useState(() => new Set());
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     apiFetch(`/api/student/courses/${id}`, { cache: "no-store" })
       .then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.error || "Failed"); return d; })
       .then((d) => {
         setData(d);
+        setCompleted(new Set(d.progress?.completedVideos || []));
         // Auto-select the first available video for the player.
         for (const item of d.curriculum || []) {
           if (item.type !== "quiz" && item.videos?.length) {
@@ -195,6 +271,21 @@ export default function CourseLearningPage() {
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const markComplete = async () => {
+    if (!currentVideo) return;
+    const key = `${currentVideo.ci}:${currentVideo.vi}`;
+    if (completed.has(key) || saving) return;
+    setSaving(true);
+    try {
+      const res = await apiFetch(`/api/student/courses/${id}/progress`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ classIndex: currentVideo.ci, videoIndex: currentVideo.vi }),
+      });
+      const d = await res.json();
+      if (res.ok) setCompleted(new Set(d.completedVideos || []));
+    } finally { setSaving(false); }
+  };
+
   if (loading) return <StudentShell subtitle="Course"><p className="pf-muted">Loading course…</p></StudentShell>;
   if (error) return (
     <StudentShell subtitle="Course">
@@ -210,6 +301,15 @@ export default function CourseLearningPage() {
   const quizCount = curriculum.filter((c) => c.type === "quiz").length;
   const videoCount = curriculum.reduce((n, c) => n + (c.videos?.length || 0), 0);
 
+  /* ── Progressive (drip) unlock logic ── */
+  const classComplete = (cls) => (cls.videos || []).every((_, vi) => completed.has(`${cls.index}:${vi}`));
+  const prevClassOf = (i) => { for (let k = i - 1; k >= 0; k--) { if (curriculum[k].type !== "quiz") return curriculum[k]; } return null; };
+  // A class/quiz item unlocks once the nearest preceding class is fully watched.
+  const itemUnlocked = (i) => { const pc = prevClassOf(i); return !pc || classComplete(pc); };
+  // Within an unlocked class, a lecture unlocks once the previous one is done.
+  const videoUnlocked = (cls, vi) => vi === 0 || completed.has(`${cls.index}:${vi - 1}`);
+  const curVideoDone = currentVideo && completed.has(`${currentVideo.ci}:${currentVideo.vi}`);
+
   return (
     <StudentShell subtitle="Course">
       <Link href="/student/my-courses" className="inline-flex items-center gap-1.5 pf-muted hover:text-[#db254f] text-sm mb-4"><ArrowLeft size={15} /> Back to My Courses</Link>
@@ -220,11 +320,22 @@ export default function CourseLearningPage() {
         <div className="lg:col-span-2">
           {currentVideo?.url ? (
             <>
-              <VideoEmbed url={currentVideo.url} title={currentVideo.title} />
-              <div className="mt-4">
-                <span className="text-xs uppercase tracking-wide text-[#db254f] font-semibold">{currentVideo.className}</span>
-                <h2 className="font-bold text-xl mt-1" style={{ marginTop: "0.25rem", marginBottom: 0 }}>{currentVideo.title || "Untitled video"}</h2>
-                {currentVideo.description && <p className="pf-muted text-sm mt-2 leading-relaxed">{currentVideo.description}</p>}
+              <VideoEmbed key={currentVideo.url} url={currentVideo.url} title={currentVideo.title} onComplete={markComplete} />
+              <div className="mt-4 flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <span className="text-xs uppercase tracking-wide text-[#db254f] font-semibold">{currentVideo.className}</span>
+                  <h2 className="font-bold text-xl mt-1" style={{ marginTop: "0.25rem", marginBottom: 0 }}>{currentVideo.title || "Untitled video"}</h2>
+                  {currentVideo.description && <p className="pf-muted text-sm mt-2 leading-relaxed">{currentVideo.description}</p>}
+                </div>
+                {curVideoDone ? (
+                  <span className="shrink-0 inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-500 bg-emerald-500/12 px-3.5 py-2 rounded-full">
+                    <CheckCircle2 size={16} /> Completed
+                  </span>
+                ) : (
+                  <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-medium pf-faint px-3 py-2 rounded-full" style={{ background: "rgba(var(--fg-rgb),0.05)" }}>
+                    {saving ? "Saving…" : "Watch fully to unlock next"}
+                  </span>
+                )}
               </div>
             </>
           ) : (
@@ -270,12 +381,21 @@ export default function CourseLearningPage() {
             const isOpen = openIdx === i;
             const isQuiz = item.type === "quiz";
             const classNo = curriculum.slice(0, i + 1).filter((c) => c.type !== "quiz").length;
+            const locked = !itemUnlocked(i);
+            const done = isQuiz ? !!item.lastResult : ((item.videos || []).length > 0 && classComplete(item));
+            const vidTotal = isQuiz ? 0 : (item.videos || []).length;
+            const vidDone = isQuiz ? 0 : (item.videos || []).filter((_, vi) => completed.has(`${item.index}:${vi}`)).length;
+            const pct = vidTotal ? Math.round((vidDone / vidTotal) * 100) : 0;
+            const badgeCls = isQuiz && !locked && !done ? "text-white" : (!done && !locked ? "pf-chip" : "");
+            const badgeStyle = done ? { background: "rgba(16,185,129,0.15)", color: "#10b981" }
+              : locked ? { background: "rgba(var(--fg-rgb),0.06)", color: "rgba(var(--fg-rgb),0.5)" }
+              : isQuiz ? { background: "linear-gradient(135deg, #db254f, #e56b85)" } : undefined;
             return (
-              <div key={i} className="pf-card overflow-hidden">
-                <button onClick={() => setOpenIdx(isOpen ? -1 : i)} className="w-full flex items-center gap-3.5 p-4 text-left transition pf-hover">
-                  <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm ${isQuiz ? "text-white" : "pf-chip"}`}
-                    style={isQuiz ? { background: "linear-gradient(135deg, #db254f, #e56b85)" } : undefined}>
-                    {isQuiz ? <HelpCircle size={18} /> : String(classNo).padStart(2, "0")}
+              <div key={i} className={`pf-card overflow-hidden ${locked ? "opacity-75" : ""}`}>
+                <button onClick={() => { if (!locked) setOpenIdx(isOpen ? -1 : i); }}
+                  className={`w-full flex items-center gap-3.5 p-4 text-left transition ${locked ? "cursor-not-allowed" : "pf-hover"}`}>
+                  <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm ${badgeCls}`} style={badgeStyle}>
+                    {locked ? <Lock size={16} /> : done ? <CheckCircle2 size={18} /> : isQuiz ? <HelpCircle size={18} /> : String(classNo).padStart(2, "0")}
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="font-bold truncate">{item.name}</div>
@@ -289,12 +409,29 @@ export default function CourseLearningPage() {
                         </>
                       )}
                     </div>
+                    {!isQuiz && !locked && vidTotal > 0 && (
+                      <div className="mt-2 flex items-center gap-2 max-w-md">
+                        <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(var(--fg-rgb),0.1)" }}>
+                          <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: done ? "#10b981" : "#db254f" }} />
+                        </div>
+                        <span className="text-[11px] font-semibold shrink-0" style={done ? { color: "#10b981" } : undefined}>
+                          {vidDone}/{vidTotal} · {done ? "Completed" : `${pct}%`}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  {isQuiz && <span className="text-[11px] font-bold uppercase tracking-wide text-[#db254f] bg-rose-500/10 px-2.5 py-1 rounded-full hidden sm:block">Quiz</span>}
-                  <ChevronDown size={18} className={`pf-faint transition-transform shrink-0 ${isOpen ? "rotate-180" : ""}`} />
+                  {locked ? (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold pf-faint shrink-0"><Lock size={13} /> <span className="hidden sm:inline">Locked</span></span>
+                  ) : (
+                    <>
+                      {done && <span className="text-[11px] font-bold text-emerald-500 hidden sm:block">Completed</span>}
+                      {isQuiz && !done && <span className="text-[11px] font-bold uppercase tracking-wide text-[#db254f] bg-rose-500/10 px-2.5 py-1 rounded-full hidden sm:block">Quiz</span>}
+                      <ChevronDown size={18} className={`pf-faint transition-transform shrink-0 ${isOpen ? "rotate-180" : ""}`} />
+                    </>
+                  )}
                 </button>
 
-                {isOpen && (
+                {isOpen && !locked && (
                   <div className="border-t pf-border">
                     {isQuiz ? (
                       <div className="p-4 sm:p-5">
@@ -302,42 +439,75 @@ export default function CourseLearningPage() {
                           ? <QuizPlayer courseId={course.id} quiz={item} />
                           : <p className="pf-muted text-sm">This quiz has no questions yet.</p>}
                       </div>
+                    ) : (item.videos || []).length === 0 && (item.materials || []).length === 0 ? (
+                      <p className="pf-muted text-sm p-5">No content in this class yet.</p>
                     ) : (
-                      <div>
-                        {(item.videos || []).length === 0 && (item.materials || []).length === 0 && (
-                          <p className="pf-muted text-sm p-5">No content in this class yet.</p>
-                        )}
-                        {/* Video list — click to play in the player above */}
-                        {(item.videos || []).map((v, vi) => {
-                          const active = currentVideo?.ci === item.index && currentVideo?.vi === vi;
-                          return (
-                            <button key={vi} onClick={() => playVideo(item, vi)}
-                              className="w-full flex items-center gap-3 px-4 sm:px-5 py-3 text-left transition border-b pf-border last:border-b-0"
-                              style={active ? { background: "rgba(219,37,79,0.08)" } : undefined}>
-                              <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${active ? "bg-[#db254f] text-white" : "pf-chip"}`}>
-                                <PlayCircle size={17} />
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                <div className={`text-sm truncate ${active ? "font-bold text-[#db254f]" : "font-medium"}`}>{v.title || `Video ${vi + 1}`}</div>
-                                <div className="text-xs pf-faint">Lecture {vi + 1}</div>
-                              </div>
-                              {active ? <span className="text-[11px] font-bold text-[#db254f] shrink-0">Playing</span> : <span className="text-xs pf-faint shrink-0">Play</span>}
-                            </button>
-                          );
-                        })}
-                        {/* Materials */}
-                        {(item.materials || []).length > 0 && (
-                          <div className="px-4 sm:px-5 py-4">
-                            <div className="flex items-center gap-2 mb-2.5"><FileText size={15} className="text-[#db254f]" /><span className="font-semibold text-sm">Study Materials</span></div>
-                            <div className="flex flex-wrap gap-2">
+                      /* Lectures (left) · Study materials (right) */
+                      <div className="grid md:grid-cols-3 gap-5 p-4 sm:p-5">
+                        {/* Left: lecture list */}
+                        <div className="md:col-span-2">
+                          <div className="text-[11px] font-bold uppercase tracking-wide pf-faint mb-2.5 flex items-center gap-1.5"><VideoIcon size={13} className="text-[#db254f]" /> Lectures</div>
+                          {(item.videos || []).length === 0 ? (
+                            <p className="pf-muted text-sm">No lectures in this class yet.</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {item.videos.map((v, vi) => {
+                                const active = currentVideo?.ci === item.index && currentVideo?.vi === vi;
+                                const vLocked = !videoUnlocked(item, vi);
+                                const vDone = completed.has(`${item.index}:${vi}`);
+                                if (vLocked) {
+                                  return (
+                                    <div key={vi} className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 opacity-60 cursor-not-allowed" title="Complete the previous lecture to unlock">
+                                      <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: "rgba(var(--fg-rgb),0.06)" }}><Lock size={15} className="pf-faint" /></span>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-sm truncate font-medium pf-muted">{v.title || `Video ${vi + 1}`}</div>
+                                        <div className="text-xs pf-faint">Lecture {vi + 1}</div>
+                                      </div>
+                                      <span className="text-[11px] pf-faint shrink-0 inline-flex items-center gap-1"><Lock size={11} /> Locked</span>
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <button key={vi} onClick={() => playVideo(item, vi)}
+                                    className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${active ? "" : "pf-hover"}`}
+                                    style={active ? { background: "rgba(219,37,79,0.12)" } : undefined}>
+                                    <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${active ? "bg-[#db254f] text-white" : vDone ? "" : "pf-chip"}`}
+                                      style={vDone && !active ? { background: "rgba(16,185,129,0.15)", color: "#10b981" } : undefined}>
+                                      {vDone && !active ? <Check size={16} /> : <PlayCircle size={17} />}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                      <div className={`text-sm truncate ${active ? "font-bold text-[#db254f]" : "font-medium"}`}>{v.title || `Video ${vi + 1}`}</div>
+                                      <div className="text-xs pf-faint">Lecture {vi + 1}</div>
+                                    </div>
+                                    {active ? <span className="text-[11px] font-bold text-[#db254f] shrink-0">Playing</span>
+                                      : vDone ? <span className="text-[11px] font-semibold text-emerald-500 shrink-0 inline-flex items-center gap-1"><CheckCircle2 size={12} /> Done</span>
+                                      : <span className="text-xs pf-faint shrink-0">Play</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Right: study materials */}
+                        <div>
+                          <div className="text-[11px] font-bold uppercase tracking-wide pf-faint mb-2.5 flex items-center gap-1.5"><FileText size={13} className="text-[#db254f]" /> Study Materials</div>
+                          {(item.materials || []).length === 0 ? (
+                            <p className="pf-faint text-sm">No materials for this class.</p>
+                          ) : (
+                            <div className="space-y-2">
                               {item.materials.map((m, mi) => (
-                                <a key={mi} href={m.url} className="inline-flex items-center gap-2 text-sm rounded-xl border pf-border px-3 py-2 pf-hover transition">
-                                  <Download size={14} className="text-[#db254f]" /> {m.name || m.fileName || "File"}
+                                <a key={mi} href={m.url} download={m.name || m.fileName || undefined} target="_blank" rel="noreferrer"
+                                  className="group flex items-center gap-3 rounded-xl p-2.5 pf-hover transition"
+                                  style={{ background: "rgba(var(--fg-rgb),0.04)" }}>
+                                  <span className="w-9 h-9 rounded-lg pf-chip flex items-center justify-center shrink-0"><FileText size={16} className="text-[#db254f]" /></span>
+                                  <span className="flex-1 min-w-0 text-sm font-medium truncate">{m.name || m.fileName || "File"}</span>
+                                  <Download size={15} className="pf-faint group-hover:text-[#db254f] shrink-0 transition" />
                                 </a>
                               ))}
                             </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>

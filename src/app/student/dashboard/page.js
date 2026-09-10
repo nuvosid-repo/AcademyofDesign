@@ -94,11 +94,10 @@ function LiveClassCalendar({ liveClasses = [] }) {
     today.getDate() === d;
 
   return (
-    <div className="pf-card p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-bold text-lg flex items-center gap-2">
-          <CalendarDays size={18} className="text-[#db254f]" /> Live Class
-          Calendar
+    <div className="pf-card p-4 h-full flex flex-col">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-bold flex items-center gap-2">
+          <CalendarDays size={17} className="text-[#db254f]" /> Live Class Calendar
         </h3>
         <div className="flex items-center gap-1">
           <button
@@ -137,7 +136,7 @@ function LiveClassCalendar({ liveClasses = [] }) {
           const list = byDate[key(d)];
           const has = !!list;
           return (
-            <div key={idx} className="relative group aspect-square">
+            <div key={idx} className="relative group h-9">
               <div
                 className={`w-full h-full rounded-lg flex items-center justify-center text-sm transition ${has ? "bg-[#db254f] text-white font-semibold cursor-pointer" : isToday(d) ? "ring-1 ring-[#db254f]/50 text-[#db254f] font-semibold" : "pf-muted pf-hover"}`}
               >
@@ -173,7 +172,7 @@ function LiveClassCalendar({ liveClasses = [] }) {
           );
         })}
       </div>
-      <p className="text-xs pf-faint mt-3 flex items-center gap-1.5">
+      <p className="text-xs pf-faint mt-auto pt-3 flex items-center gap-1.5">
         <span className="w-2.5 h-2.5 rounded bg-[#db254f] inline-block" /> Live
         class — hover the date for details
       </p>
@@ -203,7 +202,7 @@ function BannerSlider() {
 
   if (!banners.length) {
     return (
-      <div className="pf-card h-full min-h-[200px] flex flex-col items-center justify-center text-center p-6">
+      <div className="pf-card h-full min-h-[150px] flex flex-col items-center justify-center text-center p-6">
         <div className="w-12 h-12 rounded-xl pf-chip flex items-center justify-center mb-3">
           <ImageIcon size={22} />
         </div>
@@ -215,7 +214,7 @@ function BannerSlider() {
   }
 
   return (
-    <div className="pf-card overflow-hidden h-full min-h-[200px] relative group">
+    <div className="pf-card overflow-hidden h-full min-h-[150px] relative group">
       {banners.map((b, idx) => (
         <img
           key={b.id}
@@ -286,8 +285,8 @@ export default function StudentDashboard() {
   return (
     <StudentShell subtitle="Dashboard">
       {/* Row 1 — welcome (wide) + banner */}
-      <div className="grid lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 pf-card overflow-hidden relative flex min-h-[150px]">
+      <div className="grid lg:grid-cols-3 gap-3">
+        <div className="lg:col-span-2 pf-card overflow-hidden relative flex min-h-[118px]">
           <div
             className="absolute inset-0"
             style={{
@@ -296,14 +295,14 @@ export default function StudentDashboard() {
             }}
             aria-hidden="true"
           />
-          <div className="relative p-6 flex flex-col justify-center">
-            <p className="text-xs uppercase tracking-[0.18em] text-[#db254f] font-semibold mb-1.5">
+          <div className="relative p-5 flex flex-col justify-center">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-[#db254f] font-semibold mb-1">
               Welcome back
             </p>
-            <h2 className="text-2xl md:text-3xl font-extrabold">
+            <h2 className="text-xl md:text-2xl font-extrabold">
               {user?.name || data?.student?.name || "Student"} 👋
             </h2>
-            <p className="pf-muted mt-1.5 text-sm">
+            <p className="pf-muted mt-1 text-sm">
               Your courses, live sessions, scores and assessments — all in one
               place.
             </p>
@@ -313,30 +312,32 @@ export default function StudentDashboard() {
       </div>
 
       {/* Row 2 — stat cards (compact) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
         {tiles.map(({ label, value, icon: Icon }) => (
-          <div key={label} className="pf-card pf-stat pf-card-hover p-4">
+          <div key={label} className="pf-card pf-stat pf-card-hover p-3.5">
             <div className="relative flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl pf-chip flex items-center justify-center shrink-0">
-                <Icon size={19} />
+              <div className="w-10 h-10 rounded-xl pf-chip flex items-center justify-center shrink-0">
+                <Icon size={18} />
               </div>
               <div>
-                <div className="text-2xl font-extrabold leading-none">
+                <div className="text-xl font-extrabold leading-none">
                   {loading ? "…" : value}
                 </div>
-                <div className="text-xs pf-muted mt-1">{label}</div>
+                <div className="text-xs pf-muted mt-0.5">{label}</div>
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Row 3 — calendar, upcoming, scores side by side */}
-      <div className="grid lg:grid-cols-3 gap-4 mt-4 items-start">
+      {/* Row 3 — calendar (left) + stacked scores/classes (right), equal height */}
+      <div className="grid lg:grid-cols-3 gap-3 mt-3 items-stretch">
         <LiveClassCalendar liveClasses={data?.liveClasses || []} />
 
-        {/* My scores — quiz scores only (score only, no titles) */}
-        <div className="pf-card p-5">
+        <div className="lg:col-span-2 grid gap-3">
+          <div className="grid md:grid-cols-2 gap-3">
+            {/* My scores — quiz scores only (score only, no titles) */}
+            <div className="pf-card p-4">
           {(() => {
             const qr = (data?.results || []).filter((r) => r.type !== "Assessment");
             const avg = qr.length ? Math.round(qr.reduce((n, r) => n + (r.percentage || 0), 0) / qr.length) : 0;
@@ -349,9 +350,9 @@ export default function StudentDashboard() {
                 {loading ? (
                   <p className="pf-muted text-sm">Loading…</p>
                 ) : qr.length ? (
-                  <div className="space-y-2.5">
-                    {qr.slice(0, 6).map((r) => (
-                      <div key={r.id} className="flex items-center justify-between gap-2 rounded-xl border pf-border p-3">
+                  <div className="space-y-2 max-h-[236px] overflow-y-auto pf-scroll pr-1 -mr-1">
+                    {qr.map((r) => (
+                      <div key={r.id} className="flex items-center justify-between gap-2 rounded-xl border pf-border p-2.5">
                         <span className="text-xs pf-muted truncate min-w-0">{r.course || "Quiz"}</span>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="text-lg font-extrabold">{r.percentage}%</span>
@@ -372,18 +373,18 @@ export default function StudentDashboard() {
         </div>
 
         {/* Upcoming live classes */}
-        <div className="pf-card p-5">
+        <div className="pf-card p-4">
           <h3 className="font-bold mb-3 flex items-center gap-2">
             <Radio size={17} className="text-[#db254f]" /> Upcoming Live Classes
           </h3>
           {loading ? (
             <p className="pf-muted text-sm">Loading…</p>
           ) : data?.liveClasses?.length ? (
-            <div className="space-y-2.5">
-              {data.liveClasses.slice(0, 4).map((l) => (
+            <div className="space-y-2 max-h-[236px] overflow-y-auto pf-scroll pr-1 -mr-1">
+              {data.liveClasses.map((l) => (
                 <div
                   key={l.id}
-                  className="flex items-center justify-between gap-2 rounded-xl border pf-border p-3 pf-hover transition"
+                  className="flex items-center justify-between gap-2 rounded-xl border pf-border p-2.5 pf-hover transition"
                 >
                   <div className="min-w-0">
                     <div className="font-semibold text-sm truncate">
@@ -409,11 +410,47 @@ export default function StudentDashboard() {
           ) : (
             <p className="pf-muted text-sm">No upcoming live classes.</p>
           )}
+            </div>
+          </div>
+
+          {/* Assessment Scores — separate card (MCQ / Written / Interview) */}
+          {(() => {
+            const ar = (data?.results || []).filter((r) => r.type === "Assessment");
+            if (loading || !ar.length) return null;
+            return (
+              <div className="pf-card p-4">
+            <h3 className="font-bold mb-3 flex items-center gap-2">
+              <Award size={17} className="text-[#db254f]" /> Assessment Scores
+            </h3>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {ar.map((r) => (
+                <div key={r.id} className="rounded-xl border pf-border p-3.5">
+                  <div className="font-semibold text-sm truncate mb-2.5">{r.assessmentTitle}</div>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-lg py-2" style={{ background: "rgba(var(--fg-rgb),0.05)" }}>
+                      <div className="text-[10px] uppercase tracking-wide pf-faint mb-0.5">MCQ</div>
+                      <div className="text-base font-extrabold">{r.mcqDone ? `${r.mcqPercentage}%` : "—"}</div>
+                    </div>
+                    <div className="rounded-lg py-2" style={{ background: "rgba(var(--fg-rgb),0.05)" }}>
+                      <div className="text-[10px] uppercase tracking-wide pf-faint mb-0.5">Written</div>
+                      <div className="text-base font-extrabold">{r.writtenGraded ? `${r.writtenScore}/${r.writtenTotal}` : (r.writtenSubmitted ? "…" : "—")}</div>
+                    </div>
+                    <div className="rounded-lg py-2" style={{ background: "rgba(var(--fg-rgb),0.05)" }}>
+                      <div className="text-[10px] uppercase tracking-wide pf-faint mb-0.5">Interview</div>
+                      <div className="text-base font-extrabold">{r.interviewGraded ? `${r.interviewScore}/${r.interviewTotal}` : "—"}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
       {/* Row 4 — continue learning */}
-      <div className="pf-card p-5 mt-4">
+      <div className="pf-card p-4 mt-3">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold flex items-center gap-2">
             <BookOpen size={17} className="text-[#db254f]" /> Continue Learning
