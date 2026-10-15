@@ -7,7 +7,14 @@ const AnswerSchema = new mongoose.Schema(
 
 // One graded question: question text, max marks, and awarded marks.
 const GradeSchema = new mongoose.Schema(
-  { question: { type: String, default: "" }, maxMarks: { type: Number, default: 0 }, marks: { type: Number, default: 0 } },
+  {
+    question: { type: String, default: "" },
+    maxMarks: { type: Number, default: 0 },
+    marks: { type: Number, default: 0 },
+    feedback: { type: String, default: "" }, // AI (or admin) justification for the marks
+    gradedBy: { type: String, default: "" },  // "ai" | "admin"
+    answer: { type: String, default: "" },    // transcript of the candidate's spoken answer (interview)
+  },
   { _id: false }
 );
 
@@ -21,6 +28,10 @@ const AssessmentResultSchema = new mongoose.Schema({
   assessmentTitle: { type: String, default: "" },
   course: { type: String, default: "" },
   type: { type: String, default: "MCQ" }, // "MCQ" | "Quiz" | "Assessment"
+
+  // Progressive attempts: 1 = Set A, 2 = Set B (retry after failing the MCQ).
+  attempt: { type: Number, default: 1 },
+  examSet: { type: String, default: "A" }, // "A" | "B"
 
   // ── MCQ (auto-scored) — legacy score/total/percentage kept for quizzes ──
   score: { type: Number, default: 0 },

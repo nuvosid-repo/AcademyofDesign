@@ -8,10 +8,27 @@ export const dynamic = "force-dynamic";
 
 const FIELDS = [
   "title", "shortDescription", "instructor", "instructors", "price", "lessons", "duration",
-  "enrolledTillDate", "thumbnail", "subscriptionType",
+  "enrolledTillDate", "startDate", "endDate", "thumbnail", "subscriptionType",
   "banner", "overview", "introVideo", "demoVideo", "classes", "videos", "materials", "status", "studentsEnrolled",
   "category", "level", "description",
 ];
+
+// GET /api/courses/:id — full course (incl. banner/thumbnail/classes base64),
+// used by the admin edit form. The list endpoint omits these for speed.
+export async function GET(request, { params }) {
+  const auth = await getAuthUser(request);
+  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { id } = await params;
+  const useMock = await resolveUseMock();
+  const c = useMock
+    ? mockCourses().find((x) => ((x._id && x._id.toString()) || x.id) === id)
+    : await Course.findById(id).lean().catch(() => null);
+  if (!c) return NextResponse.json({ error: "Course not found" }, { status: 404 });
+  const ARR = ["classes", "videos", "materials", "instructors"];
+  const course = { id: (c._id && c._id.toString()) || c.id, createdAt: c.createdAt };
+  for (const f of FIELDS) course[f] = c[f] != null ? c[f] : (ARR.includes(f) ? [] : "");
+  return NextResponse.json({ course });
+}
 
 // PUT /api/courses/:id — admin only. Updates a course.
 export async function PUT(request, { params }) {

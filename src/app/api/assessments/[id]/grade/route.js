@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockAssessments, mockAssessmentResults } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
-import { serializeAssessment } from "@/lib/assessmentFields";
+import { serializeAssessment, pickSet } from "@/lib/assessmentFields";
 import Assessment from "@/models/Assessment";
 import AssessmentResult from "@/models/AssessmentResult";
 
@@ -29,7 +29,14 @@ export async function POST(request, { params }) {
   if (!a) return NextResponse.json({ error: "Assessment not found" }, { status: 404 });
   const s = serializeAssessment(a);
 
-  const questions = section === "written" ? s.writtenQuestions : s.interviewQuestions;
+  // Grade against the set the student took (A or B).
+  const existing = useMock
+    ? mockAssessmentResults().find((r) => r.studentId === studentId && r.assessmentId === id)
+    : await AssessmentResult.findOne({ studentId, assessmentId: id }).lean().catch(() => null);
+  const examSet = existing?.examSet || ((existing?.attempt || 1) >= 2 ? "B" : "A");
+  const setQ = pickSet(s, examSet);
+
+  const questions = section === "written" ? setQ.writtenQuestions : setQ.interviewQuestions;
   const breakdown = questions.map((q, i) => ({ question: q.question || "", maxMarks: q.maxMarks || 0, marks: clamp(marks[i], q.maxMarks || 0) }));
   const score = breakdown.reduce((n, b) => n + b.marks, 0);
   const total = breakdown.reduce((n, b) => n + b.maxMarks, 0);

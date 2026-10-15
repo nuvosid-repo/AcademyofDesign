@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockEnrollments, mockStudents, mockCourses } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { courseEndExpiry } from "@/lib/enrollment";
 import Enrollment from "@/models/Enrollment";
 import Student from "@/models/Student";
 import Course from "@/models/Course";
@@ -15,47 +16,51 @@ async function requireAdmin(request) {
   return { auth };
 }
 
-// POST /api/enrollments/assign — admin assigns a course to a student.
+// POST /api/enrollments/assign — admin assigns a course to one student
+// ({ studentId, courseId }) or many at once ({ studentIds: [...], courseId }).
 export async function POST(request) {
   const guard = await requireAdmin(request);
   if (guard.error) return guard.error;
-  const { studentId, courseId } = await request.json().catch(() => ({}));
-  if (!studentId || !courseId) return NextResponse.json({ error: "studentId and courseId are required" }, { status: 400 });
+  const body = await request.json().catch(() => ({}));
+  const { courseId } = body;
+  const ids = Array.isArray(body.studentIds) ? body.studentIds.filter(Boolean) : (body.studentId ? [body.studentId] : []);
+  const bulk = Array.isArray(body.studentIds);
+  if (!ids.length || !courseId) return NextResponse.json({ error: "studentId(s) and courseId are required" }, { status: 400 });
 
   const useMock = await resolveUseMock();
-  const student = useMock
-    ? mockStudents().find((s) => ((s._id && s._id.toString()) || s.id) === studentId)
-    : await Student.findById(studentId).lean().catch(() => null);
   const course = useMock
     ? mockCourses().find((c) => ((c._id && c._id.toString()) || c.id) === courseId)
     : await Course.findById(courseId).lean().catch(() => null);
-  if (!student) return NextResponse.json({ error: "Student not found" }, { status: 404 });
   if (!course) return NextResponse.json({ error: "Course not found" }, { status: 404 });
-
   const cid = (course._id && course._id.toString()) || course.id;
-  const doc = {
-    courseId: cid,
-    courseTitle: course.title || "",
-    studentId,
-    studentName: student.name || "",
-    studentEmail: student.email || "",
-    amount: 0,
-    paymentId: "admin_assigned",
-  };
 
-  if (useMock) {
-    const store = mockEnrollments();
-    if (store.some((e) => e.studentId === studentId && (e.courseId === cid || e.courseTitle === course.title))) {
-      return NextResponse.json({ error: "Student is already enrolled in this course" }, { status: 400 });
-    }
-    store.unshift({ _id: "en_" + Date.now(), ...doc, createdAt: new Date() });
-    return NextResponse.json({ success: true });
+  let assigned = 0, skipped = 0, notFound = 0;
+  const store = useMock ? mockEnrollments() : null;
+
+  for (const studentId of ids) {
+    const student = useMock
+      ? mockStudents().find((s) => ((s._id && s._id.toString()) || s.id) === studentId)
+      : await Student.findById(studentId).lean().catch(() => null);
+    if (!student) { notFound++; continue; }
+
+    const already = useMock
+      ? store.some((e) => e.studentId === studentId && (e.courseId === cid || e.courseTitle === course.title))
+      : await Enrollment.findOne({ studentId, $or: [{ courseId: cid }, { courseTitle: course.title }] }).lean();
+    if (already) { skipped++; continue; }
+
+    const doc = {
+      courseId: cid, courseTitle: course.title || "",
+      studentId, studentName: student.name || "", studentEmail: student.email || "",
+      amount: 0, paymentId: "admin_assigned", expiresAt: courseEndExpiry(course),
+    };
+    if (useMock) store.unshift({ _id: "en_" + Date.now() + "_" + studentId, ...doc, createdAt: new Date() });
+    else await Enrollment.create(doc);
+    assigned++;
   }
 
-  const existing = await Enrollment.findOne({ studentId, $or: [{ courseId: cid }, { courseTitle: course.title }] }).lean();
-  if (existing) return NextResponse.json({ error: "Student is already enrolled in this course" }, { status: 400 });
-  await Enrollment.create(doc);
-  return NextResponse.json({ success: true });
+  // Single-assign keeps its original error-on-duplicate behaviour.
+  if (!bulk && skipped) return NextResponse.json({ error: "Student is already enrolled in this course" }, { status: 400 });
+  return NextResponse.json({ success: true, assigned, skipped, notFound, total: ids.length });
 }
 
 // DELETE /api/enrollments/assign?studentId=&courseId= — admin removes an assignment.

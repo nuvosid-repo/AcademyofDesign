@@ -10,7 +10,7 @@ import { apiFetch } from "@/lib/api";
 
 const EMPTY = {
   title: "", shortDescription: "", instructor: "", instructors: [], price: "", lessons: "", duration: "",
-  enrolledTillDate: "", thumbnail: "", subscriptionType: "B2C",
+  enrolledTillDate: "", startDate: "", endDate: "", thumbnail: "", subscriptionType: "B2C",
   banner: "", overview: "", introVideo: "", demoVideo: "", category: "", classes: [],
 };
 
@@ -162,26 +162,34 @@ export default function ManageCoursesPage() {
     }
   };
 
-  const editCourse = (c) => {
+  const editCourse = async (c) => {
     setEditingId(c.id);
-    setForm({
-      title: c.title, shortDescription: c.shortDescription, instructor: c.instructor, instructors: c.instructors || [], price: c.price,
-      lessons: c.lessons, duration: c.duration, enrolledTillDate: c.enrolledTillDate,
-      thumbnail: c.thumbnail, subscriptionType: c.subscriptionType || "B2C",
-      banner: c.banner, overview: c.overview, introVideo: c.introVideo || "", demoVideo: c.demoVideo || "", category: c.category || "",
-      classes: (c.classes && c.classes.length)
-        ? c.classes.map((cl) => (cl.type === "quiz"
-            ? { type: "quiz", name: cl.name || "", videos: [], materials: [], questions: (cl.questions || []).map((q) => ({ question: q.question || "", options: (q.options && q.options.length) ? q.options : ["", "", "", ""], correctIndex: q.correctIndex || 0 })) }
-            : { type: "class", name: cl.name || "", videos: cl.videos || [], materials: cl.materials || [], questions: [] }))
-        : ((c.videos?.length || c.materials?.length)
-            ? [{ type: "class", name: "Class 1", videos: c.videos || [], materials: c.materials || [], questions: [] }]
-            : []),
-    });
-    setThumbName(c.thumbnail ? "current image" : "");
-    setBannerName(c.banner ? "current image" : "");
     setShowForm(true);
     setError("");
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+    // The list omits heavy base64 (banner/thumbnail/classes) for speed — fetch the
+    // full course here so editing keeps the existing media.
+    let full = c;
+    try {
+      const res = await apiFetch(`/api/courses/${c.id}`, { cache: "no-store" });
+      const d = await res.json();
+      if (res.ok && d.course) full = d.course;
+    } catch { /* fall back to the list row */ }
+    setForm({
+      title: full.title, shortDescription: full.shortDescription, instructor: full.instructor, instructors: full.instructors || [], price: full.price,
+      lessons: full.lessons, duration: full.duration, enrolledTillDate: full.enrolledTillDate, startDate: full.startDate || "", endDate: full.endDate || "",
+      thumbnail: full.thumbnail, subscriptionType: full.subscriptionType || "B2C",
+      banner: full.banner, overview: full.overview, introVideo: full.introVideo || "", demoVideo: full.demoVideo || "", category: full.category || "",
+      classes: (full.classes && full.classes.length)
+        ? full.classes.map((cl) => (cl.type === "quiz"
+            ? { type: "quiz", name: cl.name || "", videos: [], materials: [], questions: (cl.questions || []).map((q) => ({ question: q.question || "", options: (q.options && q.options.length) ? q.options : ["", "", "", ""], correctIndex: q.correctIndex || 0 })) }
+            : { type: "class", name: cl.name || "", videos: cl.videos || [], materials: cl.materials || [], questions: [] }))
+        : ((full.videos?.length || full.materials?.length)
+            ? [{ type: "class", name: "Class 1", videos: full.videos || [], materials: full.materials || [], questions: [] }]
+            : []),
+    });
+    setThumbName(full.thumbnail ? "current image" : "");
+    setBannerName(full.banner ? "current image" : "");
   };
 
   const removeCourse = async (id) => {
@@ -278,6 +286,14 @@ export default function ManageCoursesPage() {
               <div>
                 <label className={label}>Student Enrolled till date<Req /></label>
                 <DatePicker value={form.enrolledTillDate} onChange={(v) => set("enrolledTillDate", v)} />
+              </div>
+              <div>
+                <label className={label}>Course Start Date</label>
+                <DatePicker value={form.startDate} onChange={(v) => set("startDate", v)} />
+              </div>
+              <div>
+                <label className={label}>Course End Date</label>
+                <DatePicker value={form.endDate} onChange={(v) => set("endDate", v)} />
               </div>
               <div>
                 <label className={label}>Course Thumbnail</label>

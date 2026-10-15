@@ -1,12 +1,15 @@
 import { SessionProvider } from "@/context/SessionContext";
+import { ThemeProvider } from "@/context/ThemeContext";
 import { ConfirmProvider } from "@/components/portal/ConfirmDialog";
 
-// Admin portal root: session + a SweetAlert-style confirm dialog available to
-// all admin screens.
+// Admin portal root: theme (dark/light), session + a SweetAlert-style confirm
+// dialog available to all admin screens.
 export default function AdminLayout({ children }) {
   return (
-    <SessionProvider>
-      <ConfirmProvider>{children}</ConfirmProvider>
-    </SessionProvider>
+    <ThemeProvider>
+      <SessionProvider>
+        <ConfirmProvider>{children}</ConfirmProvider>
+      </SessionProvider>
+    </ThemeProvider>
   );
 }

@@ -4,10 +4,18 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, ArrowRight, BookOpen, PlayCircle, FileText, HelpCircle, ChevronDown, Clock,
-  Users, Download, CheckCircle2, Video as VideoIcon, Lock, Check,
+  Users, Download, CheckCircle2, Video as VideoIcon, Lock, Check, Eye, X, Loader2,
+  Play, Pause, SkipForward, SkipBack, Zap,
 } from "lucide-react";
 import StudentShell from "@/components/portal/StudentShell";
 import { apiFetch } from "@/lib/api";
+
+// Only Excel/CSV spreadsheets are downloadable; other materials are view-only.
+const isExcelFile = (m) => {
+  const name = (m.fileName || m.name || "").toLowerCase();
+  const type = (m.type || "").toLowerCase();
+  return /\.(xlsx?|csv)$/.test(name) || type.includes("spreadsheet") || type.includes("excel") || type === "text/csv";
+};
 
 /* Lazy-load the YouTube IFrame API once (needed to detect when a video ends). */
 let ytPromise;
@@ -44,20 +52,23 @@ function loadVimeo() {
 
 /* Embeddable player that reports completion via onComplete only once the
    viewer has watched the whole video (YouTube/Vimeo 'ended' or <video> end). */
-function VideoEmbed({ url, title, onComplete }) {
+function VideoEmbed({ url, title, onComplete, controlsRef, onPlayState }) {
   const yt = url ? url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/) : null;
   const vimeo = url ? url.match(/vimeo\.com\/(\d+)/) : null;
   const isFile = /\.(mp4|webm|ogg)(\?|$)/i.test(url || "");
   const box = "w-full aspect-video rounded-xl overflow-hidden border pf-border bg-black";
 
   const mountRef = useRef(null);
+  const videoRef = useRef(null);
   const doneRef = useRef(false);
-  // Keep the latest onComplete so player event handlers never fire a stale one.
+  // Keep the latest callbacks so player event handlers never fire a stale one.
   const cbRef = useRef(onComplete);
-  useEffect(() => { cbRef.current = onComplete; });
+  const psRef = useRef(onPlayState);
+  useEffect(() => { cbRef.current = onComplete; psRef.current = onPlayState; });
   const fire = () => { if (!doneRef.current) { doneRef.current = true; cbRef.current?.(); } };
+  const setControls = (c) => { if (controlsRef) controlsRef.current = c; };
 
-  // YouTube — needs the IFrame API to know when the video reaches the end.
+  // YouTube — needs the IFrame API for end-detection + external play/pause.
   useEffect(() => {
     if (!yt) return;
     let player, cancelled = false;
@@ -66,14 +77,17 @@ function VideoEmbed({ url, title, onComplete }) {
       player = new YT.Player(mountRef.current, {
         width: "100%", height: "100%", videoId: yt[1],
         playerVars: { rel: 0, modestbranding: 1 },
-        events: { onStateChange: (e) => { if (e.data === 0) fire(); } },
+        events: {
+          onStateChange: (e) => { if (e.data === 0) fire(); psRef.current?.(e.data === 1); },
+        },
       });
+      setControls({ play: () => { try { player.playVideo(); } catch { /* noop */ } }, pause: () => { try { player.pauseVideo(); } catch { /* noop */ } } });
     });
-    return () => { cancelled = true; try { player?.destroy?.(); } catch { /* noop */ } };
+    return () => { cancelled = true; setControls(null); try { player?.destroy?.(); } catch { /* noop */ } };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
 
-  // Vimeo — attach the SDK to the iframe and listen for 'ended'.
+  // Vimeo — attach the SDK to the iframe for 'ended' + play/pause.
   useEffect(() => {
     if (!vimeo) return;
     let player, cancelled = false;
@@ -81,15 +95,26 @@ function VideoEmbed({ url, title, onComplete }) {
       if (cancelled || !V || !mountRef.current) return;
       player = new V.Player(mountRef.current);
       player.on("ended", fire);
+      player.on("play", () => psRef.current?.(true));
+      player.on("pause", () => psRef.current?.(false));
+      setControls({ play: () => { try { player.play(); } catch { /* noop */ } }, pause: () => { try { player.pause(); } catch { /* noop */ } } });
     });
-    return () => { cancelled = true; try { player?.off?.("ended"); } catch { /* noop */ } };
+    return () => { cancelled = true; setControls(null); try { player?.off?.("ended"); } catch { /* noop */ } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url]);
+
+  // HTML5 <video> — wire external controls to the element.
+  useEffect(() => {
+    if (!isFile) return;
+    setControls({ play: () => videoRef.current?.play(), pause: () => videoRef.current?.pause() });
+    return () => setControls(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
 
   if (!url) return null;
   if (yt) return <div className={box}><div ref={mountRef} className="w-full h-full" /></div>;
   if (vimeo) return <div className={box}><iframe ref={mountRef} src={`https://player.vimeo.com/video/${vimeo[1]}`} title={title} className="w-full h-full" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen /></div>;
-  if (isFile) return <div className={box}><video src={url} controls className="w-full h-full" onEnded={fire} /></div>;
+  if (isFile) return <div className={box}><video ref={videoRef} src={url} controls className="w-full h-full" onEnded={fire} onPlay={() => psRef.current?.(true)} onPause={() => psRef.current?.(false)} /></div>;
   // Non-embeddable link: can't track playback, so count opening it as viewed.
   return <a href={url} target="_blank" rel="noreferrer" onClick={fire} className="inline-flex items-center gap-1.5 text-sm text-[#db254f] hover:underline"><PlayCircle size={15} /> Open video</a>;
 }
@@ -241,10 +266,14 @@ export default function CourseLearningPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [openIdx, setOpenIdx] = useState(0);
-  const [imgError, setImgError] = useState(false);
   const [currentVideo, setCurrentVideo] = useState(null);
   const [completed, setCompleted] = useState(() => new Set());
   const [saving, setSaving] = useState(false);
+  const [viewMat, setViewMat] = useState(null); // study material open in the viewer modal
+  const [viewUrl, setViewUrl] = useState("");    // object URL of the fetched material
+  const [viewErr, setViewErr] = useState("");
+  const [isPlaying, setIsPlaying] = useState(false); // current player state (for quick-action play/pause)
+  const playerControls = useRef(null);               // { play, pause } exposed by VideoEmbed
 
   useEffect(() => {
     apiFetch(`/api/student/courses/${id}`, { cache: "no-store" })
@@ -267,9 +296,11 @@ export default function CourseLearningPage() {
 
   const playVideo = (item, vi) => {
     const v = item.videos[vi];
+    setIsPlaying(false);
     setCurrentVideo({ ci: item.index, vi, url: v.url, title: v.title, description: v.description, className: item.name });
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   };
+  const togglePlay = () => { const c = playerControls.current; if (!c) return; isPlaying ? c.pause?.() : c.play?.(); };
 
   const markComplete = async () => {
     if (!currentVideo) return;
@@ -284,6 +315,35 @@ export default function CourseLearningPage() {
       const d = await res.json();
       if (res.ok) setCompleted(new Set(d.completedVideos || []));
     } finally { setSaving(false); }
+  };
+
+  // Fetch a material WITH the student's auth token (apiFetch sends the bearer),
+  // so it works regardless of cookies. View-only → object URL in the modal;
+  // Excel → trigger a download.
+  const openMaterial = async (m) => {
+    setViewMat(m); setViewUrl(""); setViewErr("");
+    try {
+      const res = await apiFetch(m.url);
+      if (!res.ok) { setViewErr("Could not load this material."); return; }
+      const blob = await res.blob();
+      setViewUrl(URL.createObjectURL(blob));
+    } catch { setViewErr("Could not load this material."); }
+  };
+  const closeMaterial = () => {
+    if (viewUrl) { try { URL.revokeObjectURL(viewUrl); } catch { /* noop */ } }
+    setViewUrl(""); setViewMat(null); setViewErr("");
+  };
+  const downloadMaterial = async (m) => {
+    try {
+      const res = await apiFetch(m.url);
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = m.name || m.fileName || "file";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch { /* noop */ }
   };
 
   if (loading) return <StudentShell subtitle="Course"><p className="pf-muted">Loading course…</p></StudentShell>;
@@ -310,17 +370,45 @@ export default function CourseLearningPage() {
   const videoUnlocked = (cls, vi) => vi === 0 || completed.has(`${cls.index}:${vi - 1}`);
   const curVideoDone = currentVideo && completed.has(`${currentVideo.ci}:${currentVideo.vi}`);
 
+  /* ── Quick-action: flat video order (prev/next) + overall progress ── */
+  const flatVideos = [];
+  curriculum.forEach((item) => { if (item.type !== "quiz") (item.videos || []).forEach((v, vi) => flatVideos.push({ ci: item.index, vi, item, v })); });
+  const curFlat = flatVideos.findIndex((f) => currentVideo && f.ci === currentVideo.ci && f.vi === currentVideo.vi);
+  const prevV = curFlat > 0 ? flatVideos[curFlat - 1] : null;
+  const nextV = curFlat >= 0 && curFlat < flatVideos.length - 1 ? flatVideos[curFlat + 1] : null;
+  const nextUnlocked = nextV && itemUnlocked(nextV.ci) && videoUnlocked(nextV.item, nextV.vi);
+  const totalVideos = flatVideos.length;
+  const doneVideos = flatVideos.filter((f) => completed.has(`${f.ci}:${f.vi}`)).length;
+  const progressPct = totalVideos ? Math.round((doneVideos / totalVideos) * 100) : 0;
+  // Study materials of the class the current video belongs to.
+  const curClass = currentVideo ? curriculum.find((c) => c.type !== "quiz" && c.index === currentVideo.ci) : null;
+  const curMaterials = curClass?.materials || [];
+
   return (
     <StudentShell subtitle="Course">
       <Link href="/student/my-courses" className="inline-flex items-center gap-1.5 pf-muted hover:text-[#db254f] text-sm mb-4"><ArrowLeft size={15} /> Back to My Courses</Link>
 
-      {/* ── Top: video player (left) + course info (right) ── */}
+      {/* ── Course heading (above the video) ── */}
+      <div className="mb-5">
+        {course.category && <span className="text-xs uppercase tracking-wide text-[#db254f] font-bold">{course.category}</span>}
+        <h1 className="font-extrabold text-2xl md:text-3xl leading-tight mt-1">{course.title}</h1>
+        {course.description && <p className="pf-muted mt-2 text-sm leading-relaxed max-w-3xl">{course.description}</p>}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mt-3 text-sm">
+          <span className="inline-flex items-center gap-1.5 pf-muted"><BookOpen size={15} className="text-[#db254f]" /> {classCount} class{classCount !== 1 ? "es" : ""}</span>
+          <span className="inline-flex items-center gap-1.5 pf-muted"><VideoIcon size={15} className="text-[#db254f]" /> {videoCount} video{videoCount !== 1 ? "s" : ""}</span>
+          {quizCount > 0 && <span className="inline-flex items-center gap-1.5 pf-muted"><HelpCircle size={15} className="text-[#db254f]" /> {quizCount} quiz{quizCount !== 1 ? "zes" : ""}</span>}
+          {course.duration && <span className="inline-flex items-center gap-1.5 pf-muted"><Clock size={15} className="text-[#db254f]" /> {course.duration}</span>}
+          {course.instructors?.length > 0 && <span className="inline-flex items-center gap-1.5 pf-muted"><Users size={15} className="text-[#db254f]" /> {course.instructors.join(", ")}</span>}
+        </div>
+      </div>
+
+      {/* ── Player (left) + Quick Action panel (right) ── */}
       <div className="grid lg:grid-cols-3 gap-5 items-start">
         {/* Player */}
         <div className="lg:col-span-2">
           {currentVideo?.url ? (
             <>
-              <VideoEmbed key={currentVideo.url} url={currentVideo.url} title={currentVideo.title} onComplete={markComplete} />
+              <VideoEmbed key={currentVideo.url} url={currentVideo.url} title={currentVideo.title} onComplete={markComplete} controlsRef={playerControls} onPlayState={setIsPlaying} />
               <div className="mt-4 flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <span className="text-xs uppercase tracking-wide text-[#db254f] font-semibold">{currentVideo.className}</span>
@@ -346,29 +434,65 @@ export default function CourseLearningPage() {
           )}
         </div>
 
-        {/* Course info card */}
-        <div className="pf-card overflow-hidden">
-          <div className="relative h-36">
-            {course.image && !imgError ? (
-              <img src={course.image} alt={course.title} className="w-full h-full object-cover" onError={() => setImgError(true)} />
+        {/* Quick Action panel */}
+        <aside className="pf-card p-5 lg:sticky lg:top-4">
+          <h3 className="font-bold flex items-center gap-2 mb-4"><Zap size={17} className="text-[#db254f]" /> Quick Actions</h3>
+
+          {/* Course progress */}
+          <div className="flex items-center justify-between text-xs mb-1.5">
+            <span className="pf-muted">Course progress</span>
+            <span className="font-extrabold" style={{ color: progressPct >= 100 ? "#10b981" : "#db254f" }}>{progressPct}%</span>
+          </div>
+          <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(var(--fg-rgb),0.1)" }}>
+            <div className="h-full rounded-full transition-all" style={{ width: `${progressPct}%`, background: progressPct >= 100 ? "#10b981" : "#db254f" }} />
+          </div>
+          <p className="text-[11px] pf-faint mt-1.5">{doneVideos} of {totalVideos} lesson{totalVideos !== 1 ? "s" : ""} completed</p>
+
+          {/* Playback controls */}
+          <div className="flex items-center justify-center gap-4 mt-5 py-3.5 rounded-2xl" style={{ background: "rgba(var(--fg-rgb),0.04)" }}>
+            <button onClick={() => prevV && playVideo(prevV.item, prevV.vi)} disabled={!prevV} title="Previous lesson"
+              className="btn-pill w-12 h-12 border pf-border flex items-center justify-center pf-muted hover:text-[#db254f] pf-hover transition disabled:opacity-25 disabled:cursor-not-allowed"><SkipBack size={18} fill="currentColor" /></button>
+            <button onClick={togglePlay} disabled={!currentVideo} title={isPlaying ? "Pause" : "Play"}
+              className="btn-pill w-16 h-16 text-white flex items-center justify-center shadow-xl shadow-rose-500/40 hover:scale-105 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: "linear-gradient(135deg, #db254f, #e56b85)" }}>
+              {isPlaying ? <Pause size={26} fill="currentColor" /> : <Play size={26} fill="currentColor" className="ml-1" />}
+            </button>
+            <button onClick={() => nextUnlocked && playVideo(nextV.item, nextV.vi)} disabled={!nextUnlocked} title={nextV && !nextUnlocked ? "Complete current lesson first" : "Next lesson"}
+              className="btn-pill w-12 h-12 border pf-border flex items-center justify-center pf-muted hover:text-[#db254f] pf-hover transition disabled:opacity-25 disabled:cursor-not-allowed">
+              {nextV && !nextUnlocked ? <Lock size={16} /> : <SkipForward size={18} fill="currentColor" />}
+            </button>
+          </div>
+          <div className="flex items-center justify-between text-[11px] pf-faint mt-2.5 px-1">
+            <span>{prevV ? "Previous" : " "}</span>
+            <span className="font-semibold pf-muted">{curFlat >= 0 ? `Lesson ${curFlat + 1} / ${totalVideos}` : ""}</span>
+            <span>{nextUnlocked ? "Next" : (nextV ? "Locked" : " ")}</span>
+          </div>
+
+          {/* Study materials of the current class */}
+          <div className="mt-5 pt-4 border-t pf-border">
+            <div className="text-[11px] font-bold uppercase tracking-wide pf-faint mb-2.5 flex items-center gap-1.5"><FileText size={13} className="text-[#db254f]" /> Study Materials</div>
+            {curMaterials.length === 0 ? (
+              <p className="pf-faint text-sm">No materials for this lesson.</p>
             ) : (
-              <div className="w-full h-full" style={{ background: "linear-gradient(120deg, #db254f, #e56b85)" }} />
+              <div className="space-y-2">
+                {curMaterials.map((m, mi) => {
+                  const excel = isExcelFile(m);
+                  return (
+                    <button key={mi} type="button" onClick={() => (excel ? downloadMaterial(m) : openMaterial(m))} title={excel ? "Download" : "View"}
+                      className="group w-full flex items-center gap-3 rounded-xl p-2.5 pf-hover transition text-left" style={{ background: "rgba(var(--fg-rgb),0.04)" }}>
+                      <span className="w-9 h-9 rounded-lg pf-chip flex items-center justify-center shrink-0"><FileText size={16} className="text-[#db254f]" /></span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{m.name || m.fileName || "File"}</div>
+                        <div className="text-[11px] pf-faint">{excel ? "Excel · download" : "View only"}</div>
+                      </div>
+                      {excel ? <Download size={15} className="pf-faint group-hover:text-[#db254f] shrink-0 transition" /> : <Eye size={15} className="pf-faint group-hover:text-[#db254f] shrink-0 transition" />}
+                    </button>
+                  );
+                })}
+              </div>
             )}
-            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, transparent, rgba(0,0,0,0.6))" }} />
-            {course.category && <span className="absolute bottom-3 left-4 text-[11px] uppercase tracking-wide bg-[#db254f] text-white px-2.5 py-1 rounded-md font-semibold">{course.category}</span>}
           </div>
-          <div className="p-5">
-            <h1 className="font-extrabold text-xl leading-snug">{course.title}</h1>
-            {course.description && <p className="pf-muted text-sm mt-2 leading-relaxed line-clamp-3">{course.description}</p>}
-            <div className="mt-4 pt-4 border-t pf-border space-y-2.5 text-sm">
-              <div className="flex items-center gap-2.5"><BookOpen size={15} className="text-[#db254f] shrink-0" /> <span className="pf-muted">{classCount} class{classCount !== 1 ? "es" : ""}</span></div>
-              <div className="flex items-center gap-2.5"><VideoIcon size={15} className="text-[#db254f] shrink-0" /> <span className="pf-muted">{videoCount} video{videoCount !== 1 ? "s" : ""}</span></div>
-              {quizCount > 0 && <div className="flex items-center gap-2.5"><HelpCircle size={15} className="text-[#db254f] shrink-0" /> <span className="pf-muted">{quizCount} quiz{quizCount !== 1 ? "zes" : ""}</span></div>}
-              {course.duration && <div className="flex items-center gap-2.5"><Clock size={15} className="text-[#db254f] shrink-0" /> <span className="pf-muted">{course.duration}</span></div>}
-              {course.instructors?.length > 0 && <div className="flex items-start gap-2.5"><Users size={15} className="text-[#db254f] shrink-0 mt-0.5" /> <span className="pf-muted">{course.instructors.join(", ")}</span></div>}
-            </div>
-          </div>
-        </div>
+        </aside>
       </div>
 
       {/* ── Curriculum ── */}
@@ -496,15 +620,26 @@ export default function CourseLearningPage() {
                             <p className="pf-faint text-sm">No materials for this class.</p>
                           ) : (
                             <div className="space-y-2">
-                              {item.materials.map((m, mi) => (
-                                <a key={mi} href={m.url} download={m.name || m.fileName || undefined} target="_blank" rel="noreferrer"
-                                  className="group flex items-center gap-3 rounded-xl p-2.5 pf-hover transition"
-                                  style={{ background: "rgba(var(--fg-rgb),0.04)" }}>
-                                  <span className="w-9 h-9 rounded-lg pf-chip flex items-center justify-center shrink-0"><FileText size={16} className="text-[#db254f]" /></span>
-                                  <span className="flex-1 min-w-0 text-sm font-medium truncate">{m.name || m.fileName || "File"}</span>
-                                  <Download size={15} className="pf-faint group-hover:text-[#db254f] shrink-0 transition" />
-                                </a>
-                              ))}
+                              {item.materials.map((m, mi) => {
+                                const excel = isExcelFile(m);
+                                const cls = "group w-full flex items-center gap-3 rounded-xl p-2.5 pf-hover transition text-left";
+                                const bg = { background: "rgba(var(--fg-rgb),0.04)" };
+                                const inner = (
+                                  <>
+                                    <span className="w-9 h-9 rounded-lg pf-chip flex items-center justify-center shrink-0"><FileText size={16} className="text-[#db254f]" /></span>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-sm font-medium truncate">{m.name || m.fileName || "File"}</div>
+                                      <div className="text-[11px] pf-faint">{excel ? "Excel · download" : "View only"}</div>
+                                    </div>
+                                    {excel
+                                      ? <Download size={15} className="pf-faint group-hover:text-[#db254f] shrink-0 transition" />
+                                      : <Eye size={15} className="pf-faint group-hover:text-[#db254f] shrink-0 transition" />}
+                                  </>
+                                );
+                                return (
+                                  <button key={mi} type="button" onClick={() => (excel ? downloadMaterial(m) : openMaterial(m))} title={excel ? "Download" : "View"} className={cls} style={bg}>{inner}</button>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -515,6 +650,32 @@ export default function CourseLearningPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ── Study-material viewer (in-page, no new tab) ── */}
+      {viewMat && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }} onClick={closeMaterial}>
+          <div className="w-full max-w-4xl h-[85vh] pf-card overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b pf-border">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText size={16} className="text-[#db254f] shrink-0" />
+                <span className="font-semibold text-sm truncate">{viewMat.name || viewMat.fileName || "Study Material"}</span>
+                <span className="text-[11px] pf-faint shrink-0">· View only</span>
+              </div>
+              <button onClick={closeMaterial} aria-label="Close" className="w-8 h-8 rounded-full pf-hover flex items-center justify-center pf-muted shrink-0"><X size={18} /></button>
+            </div>
+            <div className="flex-1 min-h-0 flex items-center justify-center" style={{ background: "rgba(var(--fg-rgb),0.04)" }}>
+              {viewErr ? (
+                <p className="pf-muted text-sm px-4 text-center">{viewErr}</p>
+              ) : viewUrl ? (
+                /* #toolbar=0 hides the browser PDF viewer's toolbar (download/print) — view only. */
+                <iframe src={`${viewUrl}#toolbar=0&navpanes=0`} title={viewMat.name || "Study Material"} className="w-full h-full border-0" />
+              ) : (
+                <span className="inline-flex items-center gap-2 pf-muted text-sm"><Loader2 size={18} className="animate-spin" /> Loading…</span>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </StudentShell>

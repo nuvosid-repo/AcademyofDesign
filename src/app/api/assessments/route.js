@@ -15,7 +15,11 @@ export async function GET(request) {
   const useMock = await resolveUseMock();
   if (useMock) return NextResponse.json({ assessments: mockAssessments().map(serializeAssessment) });
 
-  const docs = await Assessment.find().sort({ createdAt: -1 }).lean();
+  // Drop the base64 question media (images/PDFs) from the list — it loads on edit
+  // via GET /:id. Question text/options stay so the table flags still work.
+  const docs = await Assessment.find()
+    .select("-questions.media -questionsB.media -writtenQuestions.media -writtenQuestionsB.media -interviewQuestions.media -interviewQuestionsB.media")
+    .sort({ createdAt: -1 }).lean();
   return NextResponse.json({ assessments: docs.map(serializeAssessment) });
 }
 

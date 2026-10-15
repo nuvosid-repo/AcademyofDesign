@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockAssessments, mockEnrollments, mockAssessmentResults } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { isMcqCorrect } from "@/lib/assessmentFields";
 import Assessment from "@/models/Assessment";
 import Enrollment from "@/models/Enrollment";
 import AssessmentResult from "@/models/AssessmentResult";
@@ -37,15 +38,20 @@ export async function POST(request, { params }) {
     return NextResponse.json({ success: true, alreadyAttempted: true, score: existing.mcqScore, total: existing.mcqTotal, percentage: existing.mcqPercentage });
   }
 
-  const questions = a.questions || [];
+  // Grade against the set the student is on (Set B on a 2nd attempt).
+  const attempt = existing?.attempt || 1;
+  const examSet = existing?.examSet || (attempt >= 2 ? "B" : "A");
+  const useB = examSet === "B" && a.setBEnabled;
+  const questions = (useB && (a.questionsB || []).length) ? a.questionsB : (a.questions || []);
   const total = questions.length;
   let score = 0;
-  questions.forEach((q, i) => { if (Number(answers[i]) === Number(q.correctIndex)) score++; });
+  questions.forEach((q, i) => { if (isMcqCorrect(q, answers[i])) score++; });
   const percentage = total ? Math.round((score / total) * 100) : 0;
   const passed = percentage >= (a.passingScore || 0);
 
   const setFields = {
     studentId: auth.id, studentName: auth.name || "", assessmentId: id, assessmentTitle: a.title || "", course: a.course || "", type: "Assessment",
+    attempt, examSet,
     mcqScore: score, mcqTotal: total, mcqPercentage: percentage, mcqDone: true,
     score, total, percentage, passed, updatedAt: new Date(),
   };

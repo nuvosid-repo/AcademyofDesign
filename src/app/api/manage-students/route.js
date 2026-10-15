@@ -47,7 +47,9 @@ export async function GET(request) {
     return NextResponse.json({ students: attachEnrollments(students, mockEnrollments()) });
   }
 
-  const docs = await Student.find().sort({ createdAt: -1 }).lean();
+  // Exclude the heavy identityProof base64 from the list — it loads on view/edit
+  // via GET /:id. (Avatar `image` stays so the table thumbnails still show.)
+  const docs = await Student.find().select("-identityProof -password").sort({ createdAt: -1 }).lean();
   const enr = await Enrollment.find().select("studentId studentEmail courseTitle").lean();
   return NextResponse.json({ students: attachEnrollments(docs.map(serialize), enr) });
 }

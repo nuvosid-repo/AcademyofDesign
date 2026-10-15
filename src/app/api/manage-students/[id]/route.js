@@ -19,6 +19,22 @@ async function requireAdmin(request) {
   return { auth };
 }
 
+// GET /api/manage-students/:id — full student (incl. image + identityProof
+// base64), used by the admin view modal & edit form. The list omits these.
+export async function GET(request, { params }) {
+  const guard = await requireAdmin(request);
+  if (guard.error) return guard.error;
+  const { id } = await params;
+  const useMock = await resolveUseMock();
+  const s = useMock
+    ? mockStudents().find((x) => ((x._id && x._id.toString()) || x.id) === id)
+    : await Student.findById(id).select("-password").lean().catch(() => null);
+  if (!s) return NextResponse.json({ error: "Student not found" }, { status: 404 });
+  const student = { id: (s._id && s._id.toString()) || s.id, createdAt: s.createdAt };
+  for (const f of FIELDS) student[f] = s[f] ?? "";
+  return NextResponse.json({ student });
+}
+
 export async function PUT(request, { params }) {
   const guard = await requireAdmin(request);
   if (guard.error) return guard.error;

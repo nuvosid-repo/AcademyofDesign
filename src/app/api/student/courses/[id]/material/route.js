@@ -38,10 +38,17 @@ export async function GET(request, { params }) {
   if (!m) return NextResponse.redirect(mat.data);
   const buf = Buffer.from(m[2], "base64");
   const fname = (mat.fileName || mat.name || "file").replace(/"/g, "");
+
+  // Only Excel/CSV spreadsheets are downloadable; everything else is view-only
+  // (served inline so it opens in the browser rather than downloading).
+  const typeStr = (mat.type || m[1] || "").toLowerCase();
+  const isExcel = /\.(xlsx?|csv)$/i.test(fname) || typeStr.includes("spreadsheet") || typeStr.includes("excel") || typeStr === "text/csv";
+  const disposition = isExcel ? `attachment; filename="${fname}"` : `inline; filename="${fname}"`;
+
   return new Response(buf, {
     headers: {
       "Content-Type": mat.type || m[1] || "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${fname}"`,
+      "Content-Disposition": disposition,
       "Cache-Control": "private, max-age=3600",
     },
   });

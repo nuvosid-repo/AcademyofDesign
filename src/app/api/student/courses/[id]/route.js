@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockCourses, mockEnrollments, mockAssessmentResults } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { isEnrollmentActive } from "@/lib/enrollment";
 import Course from "@/models/Course";
 import Enrollment from "@/models/Enrollment";
 import AssessmentResult from "@/models/AssessmentResult";
@@ -31,6 +32,7 @@ export async function GET(request, { params }) {
     : await Enrollment.find({ studentId: auth.id }).lean();
   const myEnroll = enrollments.find((e) => e.courseId === cid || (e.courseTitle && e.courseTitle === course.title));
   if (!myEnroll) return NextResponse.json({ error: "You are not enrolled in this course" }, { status: 403 });
+  if (!isEnrollmentActive(myEnroll)) return NextResponse.json({ error: "Your access to this course has expired. Please renew to continue." }, { status: 403 });
   const completedVideos = Array.isArray(myEnroll.completedVideos) ? myEnroll.completedVideos : [];
 
   const base = `/api/student/courses/${cid}`;

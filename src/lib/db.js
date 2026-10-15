@@ -34,14 +34,37 @@ export function isMockConfigured() {
   );
 }
 
-// Decide mock vs real DB for a request; falls back to mock if the DB is down.
+// In production (e.g. Vercel) the in-memory Mock Mode is NOT a valid store:
+// serverless instances don't share memory and it isn't persisted, so data
+// appears to "vanish" between requests. So in production we must never silently
+// fall back to mock — we surface a clear error instead. Mock stays available in
+// development so the app runs locally before a DB is configured.
+const IS_PROD = process.env.NODE_ENV === "production";
+
+// Decide mock vs real DB for a request. In dev, falls back to mock when no DB is
+// configured or the DB is down. In production, refuses to use mock and throws a
+// clear, actionable error so the misconfiguration is obvious in the logs.
 export async function resolveUseMock() {
-  if (isMockConfigured()) return true;
+  if (isMockConfigured()) {
+    if (IS_PROD) {
+      throw new Error(
+        "MONGODB_URI is not configured in this deployment. Set MONGODB_URI (and JWT_SECRET) in your hosting environment variables and redeploy — the app will NOT use in-memory Mock Mode in production because that data is not persisted."
+      );
+    }
+    return true;
+  }
   try {
     await connectToDatabase();
     return false;
   } catch (e) {
-    console.warn("⚠️ MongoDB connection failed, using Mock Mode:", e.message);
+    if (IS_PROD) {
+      // Don't silently drop to mock in production — that loses data. Fail loud.
+      console.error("❌ MongoDB connection failed in production:", e.message);
+      throw new Error(
+        "Could not connect to MongoDB. Check that MONGODB_URI is correct and that MongoDB Atlas → Network Access allows connections from anywhere (0.0.0.0/0), then redeploy. Details: " + e.message
+      );
+    }
+    console.warn("⚠️ MongoDB connection failed, using Mock Mode (dev only):", e.message);
     return true;
   }
 }
@@ -166,4 +189,9 @@ export function mockAssessmentResults() {
 export function mockWorkshops() {
   if (!globalThis.__mockWorkshops) globalThis.__mockWorkshops = [];
   return globalThis.__mockWorkshops;
+}
+
+export function mockResumes() {
+  if (!globalThis.__mockResumes) globalThis.__mockResumes = [];
+  return globalThis.__mockResumes;
 }

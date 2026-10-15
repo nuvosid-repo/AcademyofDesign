@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockAssessments, mockEnrollments, mockAssessmentResults } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
-import { serializeAssessment } from "@/lib/assessmentFields";
+import { serializeAssessment, pickSet } from "@/lib/assessmentFields";
 import Assessment from "@/models/Assessment";
 import Enrollment from "@/models/Enrollment";
 import AssessmentResult from "@/models/AssessmentResult";
@@ -41,11 +41,16 @@ export async function GET(request, { params }) {
     if (!e.studentId || seen.has(e.studentId)) continue;
     seen.add(e.studentId);
     const r = resultBy[e.studentId] || {};
+    // Grade against the question set this student actually took (A or B).
+    const examSet = r.examSet || ((r.attempt || 1) >= 2 ? "B" : "A");
+    const setQ = pickSet(s, examSet);
     students.push({
       studentId: e.studentId,
       name: e.studentName || r.studentName || "",
       email: e.studentEmail || "",
-      mcqDone: !!r.mcqDone, mcqScore: r.mcqScore || 0, mcqTotal: r.mcqTotal || 0, mcqPercentage: r.mcqPercentage || 0,
+      attempt: r.attempt || 1, examSet,
+      writtenQuestions: setQ.writtenQuestions, interviewQuestions: setQ.interviewQuestions,
+      mcqDone: !!r.mcqDone, mcqScore: r.mcqScore || 0, mcqTotal: r.mcqTotal || 0, mcqPercentage: r.mcqPercentage || 0, mcqPassed: !!r.passed,
       writtenSubmitted: !!r.writtenSubmitted, writtenGraded: !!r.writtenGraded, writtenScore: r.writtenScore || 0, writtenTotal: r.writtenTotal || 0,
       writtenAnswers: r.writtenAnswers || [],
       writtenBreakdown: r.writtenBreakdown || [],

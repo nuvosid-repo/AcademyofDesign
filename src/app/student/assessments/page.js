@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ClipboardCheck, HelpCircle, FileText, Users, Calendar, ExternalLink,
-  CheckCircle2, Clock, ArrowRight, Lock,
+  CheckCircle2, Clock, ArrowRight, Lock, RefreshCw, Award, Bot,
 } from "lucide-react";
 import StudentShell from "@/components/portal/StudentShell";
 import { apiFetch } from "@/lib/api";
@@ -32,8 +33,10 @@ function SectionChip({ icon: Icon, label }) {
 }
 
 export default function StudentAssessmentsPage() {
+  const router = useRouter();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [retrying, setRetrying] = useState("");
 
   const load = () =>
     apiFetch("/api/student/assessments", { cache: "no-store" })
@@ -43,6 +46,16 @@ export default function StudentAssessmentsPage() {
       .finally(() => setLoading(false));
 
   useEffect(() => { load(); }, []);
+
+  // Start the second attempt (Set B), then jump straight into the exam.
+  const retry = async (id) => {
+    setRetrying(id);
+    try {
+      const res = await apiFetch(`/api/student/assessments/${id}/retry`, { method: "POST" });
+      if (res.ok) router.push(`/student/assessments/${id}/exam`);
+      else { const d = await res.json().catch(() => ({})); alert(d.error || "Could not start the retry."); }
+    } finally { setRetrying(""); }
+  };
 
   return (
     <StudentShell subtitle="Assessments">
@@ -63,6 +76,7 @@ export default function StudentAssessmentsPage() {
           {items.map((a) => {
             const examEnabled = a.mcqEnabled || a.writtenEnabled;
             const examDone = (!a.mcqEnabled || a.mcqDone) && (!a.writtenEnabled || a.writtenSubmitted);
+            const onSetB = (a.attempt || 1) >= 2;
             return (
               <div key={a.id} className="pf-card p-6">
                 {/* Header */}
@@ -73,23 +87,37 @@ export default function StudentAssessmentsPage() {
                     {a.description && <p className="pf-muted text-sm mt-1.5">{a.description}</p>}
                   </div>
                   {examEnabled && (
-                    examDone
-                      ? <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(16,185,129,0.15)" }}><CheckCircle2 size={14} /> Exam done</span>
-                      : <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-[#db254f] px-3 py-1.5 rounded-full" style={{ background: "rgba(219,37,79,0.1)" }}>Pending</span>
+                    a.canRetry
+                      ? <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(245,158,11,0.15)" }}><RefreshCw size={13} /> Failed · retry</span>
+                      : a.combinedReady
+                        ? (a.combinedPassed
+                            ? <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(16,185,129,0.15)" }}><CheckCircle2 size={14} /> Passed</span>
+                            : <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(244,63,94,0.15)" }}>Not passed</span>)
+                        : examDone
+                          ? <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(245,158,11,0.15)" }}><Clock size={13} /> Awaiting result</span>
+                          : <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-[#db254f] px-3 py-1.5 rounded-full" style={{ background: "rgba(219,37,79,0.1)" }}>{onSetB ? "Attempt 2 · Set B" : "Pending"}</span>
                   )}
                 </div>
 
                 {/* Section chips */}
                 <div className="flex flex-wrap gap-2 mt-4">
-                  {a.mcqEnabled && <SectionChip icon={HelpCircle} label={`${a.mcqCount} MCQ · pass ${a.passingScore}%`} />}
+                  {a.mcqEnabled && <SectionChip icon={HelpCircle} label={`${a.mcqCount} MCQ`} />}
                   {a.writtenEnabled && <SectionChip icon={FileText} label={`${a.writtenQuestions.length} Written`} />}
                   {a.interviewEnabled && <SectionChip icon={Users} label="Live Interview" />}
+                  {examEnabled && <SectionChip icon={Award} label={`Pass ≥ ${a.passingScore}% (combined)`} />}
                 </div>
 
                 {/* Action / status */}
                 <div className="mt-5 pt-5 border-t pf-border flex flex-wrap items-center justify-between gap-4">
                   {/* Left: scores once done */}
                   <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+                    {a.combinedReady && (
+                      <span className="inline-flex items-center gap-1.5 font-semibold">
+                        <Award size={14} className="text-[#db254f]" /> <span className="pf-muted">Overall</span>
+                        <span className={`font-extrabold ${a.combinedPassed ? "text-emerald-500" : "text-rose-500"}`}>{a.combinedPercentage}%</span>
+                        <span className={`text-[11px] px-2 py-0.5 rounded-md font-medium ${a.combinedPassed ? "bg-emerald-500/15 text-emerald-500" : "bg-rose-500/15 text-rose-500"}`}>{a.combinedPassed ? "Pass" : "Fail"}</span>
+                      </span>
+                    )}
                     {a.mcqEnabled && a.mcqDone && (
                       <span className="inline-flex items-center gap-1.5"><HelpCircle size={14} className="text-[#db254f]" /> <span className="pf-muted">MCQ</span> <span className="font-extrabold">{a.mcqPercentage}%</span></span>
                     )}
@@ -103,24 +131,24 @@ export default function StudentAssessmentsPage() {
 
                   {/* Right: primary action */}
                   <div className="flex items-center gap-2">
-                    {examEnabled && !examDone && (
+                    {a.canRetry ? (
+                      <button onClick={() => retry(a.id)} disabled={retrying === a.id} className="btn-pill inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold px-5 py-2.5 shadow-md shadow-amber-500/30 transition disabled:opacity-60">
+                        <RefreshCw size={15} /> {retrying === a.id ? "Starting…" : "Retry with Set B"}
+                      </button>
+                    ) : examEnabled && !examDone ? (
                       <Link href={`/student/assessments/${a.id}/exam`} className="btn-pill inline-flex items-center gap-2 bg-[#db254f] hover:bg-[#b91d40] text-white text-sm font-semibold px-5 py-2.5 shadow-md shadow-rose-500/30 transition">
-                        Start Assessment <ArrowRight size={16} />
+                        {onSetB ? "Start Set B" : "Start Assessment"} <ArrowRight size={16} />
                       </Link>
-                    )}
+                    ) : null}
 
-                    {/* Interview becomes available after the exam is done */}
+                    {/* AI interview — available once the exam is submitted */}
                     {a.interviewEnabled && !a.interviewGraded && (
                       examEnabled && !examDone ? (
                         <span className="inline-flex items-center gap-1.5 text-xs font-medium pf-faint px-3 py-2 rounded-full" style={{ background: "rgba(var(--fg-rgb),0.05)" }}><Lock size={12} /> Interview after exam</span>
-                      ) : a.interviewLink ? (
-                        <a href={a.interviewLink} target="_blank" rel="noreferrer" className="btn-pill inline-flex items-center gap-1.5 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold px-4 py-2.5 transition">
-                          <ExternalLink size={14} /> Join Interview{(a.interviewDate || a.interviewTime) ? ` at ${[fmtDate(a.interviewDate), fmtTime(a.interviewTime)].filter(Boolean).join(" ")}` : ""}
-                        </a>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 text-xs pf-faint">
-                          {(a.interviewDate || a.interviewTime) ? <><Calendar size={12} /> {fmtDate(a.interviewDate)} {fmtTime(a.interviewTime)}</> : "Interview will be scheduled"}
-                        </span>
+                        <Link href={`/student/assessments/${a.id}/interview`} className="btn-pill inline-flex items-center gap-1.5 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold px-4 py-2.5 transition">
+                          <Bot size={15} /> Start AI Interview
+                        </Link>
                       )
                     )}
                   </div>

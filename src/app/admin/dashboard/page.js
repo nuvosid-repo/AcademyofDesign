@@ -81,19 +81,12 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      apiFetch("/api/manage-students", { cache: "no-store" }).then((r) => r.json()).catch(() => ({})),
-      apiFetch("/api/courses", { cache: "no-store" }).then((r) => r.json()).catch(() => ({})),
-      apiFetch("/api/enrollments", { cache: "no-store" }).then((r) => r.json()).catch(() => ({})),
-    ]).then(([s, c, e]) => {
-      const enr = e.enrollments || [];
-      setCounts({
-        students: (s.students || []).length,
-        courses: (c.courses || []).length,
-        revenue: enr.reduce((n, t) => n + (Number(t.amount) || 0), 0),
-        txns: enr.length,
-      });
-    }).finally(() => setLoading(false));
+    // One lightweight call — counts & revenue are computed server-side.
+    apiFetch("/api/admin/stats", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setCounts({ students: d.students ?? 0, courses: d.courses ?? 0, revenue: d.revenue ?? 0, txns: d.txns ?? 0 }))
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   const tiles = [

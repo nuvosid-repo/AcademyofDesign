@@ -44,6 +44,31 @@ export default function ManageStudentsPage() {
   const [assignCourseId, setAssignCourseId] = useState("");
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState("");
+  // Bulk select + assign
+  const [selected, setSelected] = useState(() => new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkCourseId, setBulkCourseId] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState("");
+
+  const toggleSel = (id) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const clearSel = () => setSelected(new Set());
+  const bulkAssign = async () => {
+    if (!bulkCourseId) { setBulkMsg("Please select a course"); return; }
+    setBulkBusy(true); setBulkMsg("");
+    try {
+      const res = await apiFetch("/api/enrollments/assign", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentIds: [...selected], courseId: bulkCourseId }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setBulkMsg(`Assigned to ${d.assigned} student${d.assigned !== 1 ? "s" : ""}${d.skipped ? `, ${d.skipped} already enrolled` : ""}.`);
+        await load();
+        setTimeout(() => { setBulkOpen(false); clearSel(); }, 1300);
+      } else setBulkMsg(d.error || "Failed to assign");
+    } finally { setBulkBusy(false); }
+  };
 
   const load = () =>
     apiFetch("/api/manage-students", { cache: "no-store" })
@@ -127,8 +152,16 @@ export default function ManageStudentsPage() {
     }
   };
 
-  const editItem = (s) => {
-    setEditingId(s.id);
+  // The list omits identityProof for speed — fetch the full record on demand.
+  const getFull = async (id) => {
+    try { const r = await apiFetch(`/api/manage-students/${id}`, { cache: "no-store" }); const d = await r.json(); return r.ok ? d.student : null; } catch { return null; }
+  };
+  const openView = async (s) => { setViewing(s); const full = await getFull(s.id); if (full) setViewing(full); };
+
+  const editItem = async (st) => {
+    setEditingId(st.id);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+    const s = (await getFull(st.id)) || st;
     setForm({
       name: s.name, email: s.email, dateOfBirth: s.dateOfBirth, gender: s.gender || "Male", image: s.image,
       contactNumber: s.contactNumber, qualification: s.qualification || "Bachelor's Degree", institutionName: s.institutionName,
@@ -139,7 +172,6 @@ export default function ManageStudentsPage() {
     setImgName(s.image ? "current image" : "");
     setIdName(s.identityProof ? "current file" : "");
     setError("");
-    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const deleteItem = async (id) => {
@@ -290,23 +322,40 @@ export default function ManageStudentsPage() {
           </label>
         </div>
 
+        {/* Bulk action bar */}
+        {selected.size > 0 && (
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3 px-4 py-2.5 rounded-xl bg-rose-50 border border-rose-200">
+            <span className="text-sm font-semibold text-[#db254f]">{selected.size} student{selected.size !== 1 ? "s" : ""} selected</span>
+            <div className="flex items-center gap-2">
+              <button onClick={() => { setBulkCourseId(""); setBulkMsg(""); setBulkOpen(true); }} className="inline-flex items-center gap-1.5 rounded-full btn-pill bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2 transition"><BookOpen size={15} /> Assign course</button>
+              <button onClick={clearSel} className="text-sm text-gray-500 hover:text-gray-800">Clear</button>
+            </div>
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm whitespace-nowrap">
             <thead className="text-gray-500 text-left bg-gray-50">
               <tr>
+                <th className="py-3 px-4 rounded-l-lg">
+                  <input type="checkbox" className="accent-[#db254f]" title="Select all"
+                    checked={shown.length > 0 && shown.every((s) => selected.has(s.id))}
+                    onChange={() => setSelected((sel) => { const n = new Set(sel); const all = shown.every((s) => n.has(s.id)); shown.forEach((s) => (all ? n.delete(s.id) : n.add(s.id))); return n; })} />
+                </th>
                 {["Sr. No.", "Image", "Name", "Email", "Contact", "Country", "Subscription", "Enrolled", "Status", "Actions"].map((h, i, a) => (
-                  <th key={h} className={`py-3 px-4 font-semibold ${i === 0 ? "rounded-l-lg" : ""} ${i === a.length - 1 ? "rounded-r-lg" : ""}`}>{h}</th>
+                  <th key={h} className={`py-3 px-4 font-semibold ${i === a.length - 1 ? "rounded-r-lg" : ""}`}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={10} className="py-8 text-center text-gray-400">Loading…</td></tr>
+                <tr><td colSpan={11} className="py-8 text-center text-gray-400">Loading…</td></tr>
               ) : shown.length === 0 ? (
-                <tr><td colSpan={10} className="py-8 text-center text-gray-400">No students found.</td></tr>
+                <tr><td colSpan={11} className="py-8 text-center text-gray-400">No students found.</td></tr>
               ) : (
                 shown.map((s, i) => (
-                  <tr key={s.id} className="hover:bg-gray-50">
+                  <tr key={s.id} className={`hover:bg-gray-50 ${selected.has(s.id) ? "bg-rose-50/40" : ""}`}>
+                    <td className="py-3 px-4"><input type="checkbox" className="accent-[#db254f]" checked={selected.has(s.id)} onChange={() => toggleSel(s.id)} /></td>
                     <td className="py-3 px-4 text-gray-700">{i + 1}</td>
                     <td className="py-3 px-4">
                       {s.image ? <img src={s.image} alt={s.name} className="w-9 h-9 rounded-full object-cover" /> : <span className="w-9 h-9 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-xs">{s.name?.charAt(0)?.toUpperCase() || "S"}</span>}
@@ -324,7 +373,7 @@ export default function ManageStudentsPage() {
                     <td className="py-3 px-4"><span className={`text-xs px-2.5 py-1 rounded-md font-medium ${s.status === "Active" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>{s.status}</span></td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        <button onClick={() => setViewing(s)} title="View" className="w-8 h-8 rounded-full btn-pill bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center"><Eye size={14} /></button>
+                        <button onClick={() => openView(s)} title="View" className="w-8 h-8 rounded-full btn-pill bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center"><Eye size={14} /></button>
                         <button onClick={() => openAssign(s)} title="Assign course" className="w-8 h-8 rounded-full btn-pill bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center"><BookOpen size={14} /></button>
                         <button onClick={() => editItem(s)} title="Edit" className="w-8 h-8 rounded-full btn-pill bg-[#db254f] hover:bg-[#b91d40] text-white flex items-center justify-center"><Pencil size={14} /></button>
                         <button onClick={() => deleteItem(s.id)} title="Delete" className="w-8 h-8 rounded-full btn-pill bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center"><Trash2 size={14} /></button>
@@ -455,6 +504,33 @@ export default function ManageStudentsPage() {
 
             <div className="flex justify-end px-6 py-4 border-t border-gray-100">
               <button onClick={() => setAssignFor(null)} className="text-sm text-gray-500 hover:text-gray-800">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk assign modal */}
+      {bulkOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => !bulkBusy && setBulkOpen(false)}>
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-emerald-50/70 to-transparent">
+              <span className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center"><BookOpen size={18} /></span>
+              <div>
+                <h3 className="font-bold text-gray-900">Assign course to {selected.size} student{selected.size !== 1 ? "s" : ""}</h3>
+                <p className="text-xs text-gray-500">Already-enrolled students are skipped automatically.</p>
+              </div>
+            </div>
+            <div className="p-6">
+              <label className={label}>Course</label>
+              <select className={field} value={bulkCourseId} onChange={(e) => setBulkCourseId(e.target.value)}>
+                <option value="">-- Select a course --</option>
+                {courses.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+              </select>
+              {bulkMsg && <p className="text-sm mt-3 text-gray-600">{bulkMsg}</p>}
+              <div className="flex items-center gap-3 mt-5">
+                <button onClick={bulkAssign} disabled={bulkBusy} className="inline-flex items-center gap-1.5 rounded-full btn-pill bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-5 py-2.5 disabled:opacity-60 transition"><Plus size={15} /> {bulkBusy ? "Assigning…" : `Assign to ${selected.size}`}</button>
+                <button onClick={() => setBulkOpen(false)} disabled={bulkBusy} className="text-sm text-gray-500 hover:text-gray-800">Cancel</button>
+              </div>
             </div>
           </div>
         </div>

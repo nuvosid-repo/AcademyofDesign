@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { resolveUseMock, mockEnrollments } from "@/lib/db";
+import { resolveUseMock, mockEnrollments, mockCourses } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { oneYearFromNow, courseEndExpiry } from "@/lib/enrollment";
 import Enrollment from "@/models/Enrollment";
+import Course from "@/models/Course";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,11 +43,18 @@ export async function POST(request) {
     studentEmail: body.studentEmail || "",
     amount: toPaise(price),
     paymentId: (razorpay_payment_id || "").toString(),
+    expiresAt: oneYearFromNow(),
   };
 
   if (doc.courseId || doc.courseTitle) {
     try {
       const useMock = await resolveUseMock();
+      // Course end date (if the admin set one) caps access; else 1 year.
+      const course = useMock
+        ? mockCourses().find((c) => ((c._id && c._id.toString()) || c.id) === doc.courseId || c.title === doc.courseTitle)
+        : (doc.courseId ? await Course.findById(doc.courseId).select("endDate title").lean().catch(() => null) : null)
+          || (doc.courseTitle ? await Course.findOne({ title: doc.courseTitle }).select("endDate title").lean().catch(() => null) : null);
+      doc.expiresAt = courseEndExpiry(course);
       if (useMock) {
         const store = mockEnrollments();
         const dupe = doc.studentId && store.some((e) => e.studentId === doc.studentId && (e.courseId === doc.courseId || e.courseTitle === doc.courseTitle));

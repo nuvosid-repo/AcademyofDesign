@@ -123,6 +123,124 @@ p, .desc, .description, .subtitle, [class*="desc"], [class*="description"], [cla
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
+/* Thin, subtle scrollbar for admin scroll areas (replaces the chunky native
+   horizontal scrollbar under data tables). Applies to any scrollable element
+   inside the admin shell. */
+.admin-shell { scrollbar-width: thin; scrollbar-color: rgba(31,41,55,0.28) transparent; }
+.admin-shell *::-webkit-scrollbar { height: 8px; width: 8px; }
+.admin-shell *::-webkit-scrollbar-track { background: transparent; }
+.admin-shell *::-webkit-scrollbar-thumb { background: rgba(31,41,55,0.2); border-radius: 9999px; border: 2px solid transparent; background-clip: padding-box; }
+.admin-shell *::-webkit-scrollbar-thumb:hover { background: rgba(31,41,55,0.35); background-clip: padding-box; }
+
+/* ===========================================================================
+   Admin dark mode — the admin pages use hard-coded light Tailwind utilities.
+   Rather than rewriting every page, we remap the common ones to dark values,
+   scoped to the admin shell when the app theme is dark. Only plain class
+   selectors are used here (escaped opacity/variant utilities like bg-white/85
+   are handled via helper classes on the components) so the CSS parser keeps
+   every rule. Toggle lives in the admin topbar (shares the global data-theme).
+   =========================================================================== */
+[data-theme="dark"] .admin-shell { background-color: #141414 !important; color: #e5e7eb; --fg-rgb: 229,231,235; }
+[data-theme="dark"] .admin-shell *::-webkit-scrollbar-thumb { background: rgba(229,231,235,0.2); }
+[data-theme="dark"] .admin-shell *::-webkit-scrollbar-thumb:hover { background: rgba(229,231,235,0.35); }
+
+/* Surfaces */
+[data-theme="dark"] .admin-shell .bg-white { background-color: #1e1e1e !important; }
+[data-theme="dark"] .admin-shell .bg-gray-50 { background-color: #191919 !important; }
+[data-theme="dark"] .admin-shell .bg-gray-100 { background-color: #2a2a2a !important; }
+[data-theme="dark"] .admin-shell .bg-gray-50\/70,
+[data-theme="dark"] .admin-shell .bg-gray-50\/80 { background-color: rgba(255,255,255,0.05) !important; }
+[data-theme="dark"] .admin-shell .bg-gray-100\/70,
+[data-theme="dark"] .admin-shell .bg-gray-100\/80 { background-color: rgba(255,255,255,0.08) !important; }
+[data-theme="dark"] .admin-shell .bg-white\/85 { background-color: rgba(20,20,20,0.9) !important; }
+[data-theme="dark"] .admin-shell .from-rose-50,
+[data-theme="dark"] .admin-shell .from-rose-50\/60,
+[data-theme="dark"] .admin-shell .from-rose-50\/70 { background-image: linear-gradient(to right, rgba(219,37,79,0.16), transparent) !important; }
+[data-theme="dark"] .admin-shell .from-emerald-50\/60,
+[data-theme="dark"] .admin-shell .from-emerald-50\/70 { background-image: linear-gradient(to right, rgba(16,185,129,0.14), transparent) !important; }
+
+/* Light gray/rose drop-shadows read as glows on dark → soften them */
+[data-theme="dark"] .admin-shell .shadow-gray-200\/70,
+[data-theme="dark"] .admin-shell .shadow-gray-200\/60,
+[data-theme="dark"] .admin-shell .shadow-rose-200,
+[data-theme="dark"] .admin-shell .shadow-rose-100 { --tw-shadow-color: rgba(0,0,0,0.5) !important; }
+
+/* Text */
+[data-theme="dark"] .admin-shell .text-gray-900 { color: #f3f4f6 !important; }
+[data-theme="dark"] .admin-shell .text-gray-800 { color: #e5e7eb !important; }
+[data-theme="dark"] .admin-shell .text-gray-700 { color: #d1d5db !important; }
+[data-theme="dark"] .admin-shell .text-gray-600 { color: #b8bcc4 !important; }
+[data-theme="dark"] .admin-shell .text-gray-500 { color: #9ca3af !important; }
+[data-theme="dark"] .admin-shell .text-gray-400 { color: #7c828b !important; }
+[data-theme="dark"] .admin-shell .text-black { color: #f3f4f6 !important; }
+
+/* Borders */
+[data-theme="dark"] .admin-shell .border-gray-100 { border-color: rgba(255,255,255,0.07) !important; }
+[data-theme="dark"] .admin-shell .border-gray-200 { border-color: rgba(255,255,255,0.11) !important; }
+[data-theme="dark"] .admin-shell .border-gray-300 { border-color: rgba(255,255,255,0.15) !important; }
+
+/* Inputs — keep them dark (incl. on focus) with readable text & placeholders */
+[data-theme="dark"] .admin-shell input,
+[data-theme="dark"] .admin-shell select,
+[data-theme="dark"] .admin-shell textarea { color: #e5e7eb; }
+[data-theme="dark"] .admin-shell input:focus,
+[data-theme="dark"] .admin-shell textarea:focus,
+[data-theme="dark"] .admin-shell select:focus { background-color: #232323 !important; }
+[data-theme="dark"] .admin-shell input::placeholder,
+[data-theme="dark"] .admin-shell textarea::placeholder { color: #6b7280 !important; }
+[data-theme="dark"] .admin-shell select option { background: #1e1e1e; color: #e5e7eb; }
+
+/* Hover states (menu items, table rows, buttons) — keep dark on hover */
+[data-theme="dark"] .admin-shell .hover\:bg-gray-50:hover { background-color: rgba(255,255,255,0.05) !important; }
+[data-theme="dark"] .admin-shell .hover\:bg-gray-100:hover { background-color: rgba(255,255,255,0.08) !important; }
+[data-theme="dark"] .admin-shell .hover\:bg-rose-50:hover { background-color: rgba(219,37,79,0.16) !important; }
+[data-theme="dark"] .admin-shell .hover\:text-gray-800:hover { color: #e5e7eb !important; }
+[data-theme="dark"] .admin-shell .hover\:text-gray-900:hover { color: #f3f4f6 !important; }
+
+/* Divider bars */
+[data-theme="dark"] .admin-shell .bg-gray-200 { background-color: rgba(255,255,255,0.11) !important; }
+
+/* Light colour tints → translucent so they read on dark */
+[data-theme="dark"] .admin-shell .bg-rose-50 { background-color: rgba(219,37,79,0.15) !important; }
+[data-theme="dark"] .admin-shell .bg-rose-100 { background-color: rgba(219,37,79,0.22) !important; }
+[data-theme="dark"] .admin-shell .bg-emerald-50 { background-color: rgba(16,185,129,0.12) !important; }
+[data-theme="dark"] .admin-shell .bg-emerald-100 { background-color: rgba(16,185,129,0.18) !important; }
+[data-theme="dark"] .admin-shell .text-emerald-700 { color: #34d399 !important; }
+[data-theme="dark"] .admin-shell .bg-amber-50 { background-color: rgba(245,158,11,0.12) !important; }
+[data-theme="dark"] .admin-shell .bg-amber-100 { background-color: rgba(245,158,11,0.18) !important; }
+[data-theme="dark"] .admin-shell .text-amber-700,
+[data-theme="dark"] .admin-shell .text-amber-600 { color: #fbbf24 !important; }
+[data-theme="dark"] .admin-shell .bg-indigo-100 { background-color: rgba(99,102,241,0.2) !important; }
+[data-theme="dark"] .admin-shell .text-indigo-700 { color: #a5b4fc !important; }
+
+/* Brand-rose accent text (text-[#db254f]) → a lighter rose so it stays legible
+   on dark and on rose-tinted cards. */
+[data-theme="dark"] .admin-shell .text-\[\#db254f\] { color: #f2809b !important; }
+
+/* Date/Time picker popup (portaled to <body>, outside .admin-shell) */
+[data-theme="dark"] .dtp-pop .dtp { background-color: #1e1e1e !important; border-color: rgba(255,255,255,0.1) !important; color: #e5e7eb; }
+[data-theme="dark"] .dtp-pop .text-gray-800 { color: #e5e7eb !important; }
+[data-theme="dark"] .dtp-pop .text-gray-700 { color: #d1d5db !important; }
+[data-theme="dark"] .dtp-pop .text-gray-500,
+[data-theme="dark"] .dtp-pop .text-gray-400 { color: #9ca3af !important; }
+[data-theme="dark"] .dtp-pop .border-gray-100 { border-color: rgba(255,255,255,0.08) !important; }
+
+/* Resume paper — a fixed white "printed resume" look that stays white/dark-text
+   in BOTH light and dark themes (used in the student preview + admin view). */
+.resume-paper { background: #ffffff !important; color: #1a1a1a; padding: 2rem; line-height: 1.5; }
+.resume-paper h1 { font-size: 26px; font-weight: 800; color: #1a1a1a; }
+.resume-paper h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: #db254f; border-bottom: 2px solid #f0d3da; padding-bottom: 4px; margin: 18px 0 10px; font-weight: 700; }
+.resume-paper h3 { font-size: 15px; font-weight: 700; color: #1a1a1a; }
+.resume-paper p { font-size: 13px; color: #1a1a1a; }
+.resume-paper .title { color: #db254f; font-weight: 600; margin-top: 2px; }
+.resume-paper .row { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: #555; margin-top: 6px; }
+.resume-paper .item { margin-bottom: 10px; }
+.resume-paper .sub { color: #666; font-size: 13px; }
+.resume-paper .chip { display: inline-block; background: #fce8ee; color: #db254f; border-radius: 6px; padding: 3px 10px; font-size: 12px; margin: 0 6px 6px 0; }
+.resume-paper .between { display: flex; justify-content: space-between; gap: 12px; }
+.resume-paper .period { color: #888; font-size: 12px; white-space: nowrap; }
+.resume-paper a { color: #db254f; text-decoration: underline; }
+
 /* Thin, theme-aware scrollbar for capped dashboard lists. */
 .pf-scroll { scrollbar-width: thin; scrollbar-color: rgba(var(--fg-rgb,0,0,0),0.22) transparent; }
 .pf-scroll::-webkit-scrollbar { width: 6px; }

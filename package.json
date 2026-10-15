@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "@gsap/react": "^2.1.2",
     "bcryptjs": "^3.0.3",
     "bootstrap": "^5.3.3",

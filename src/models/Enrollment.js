@@ -13,6 +13,8 @@ const EnrollmentSchema = new mongoose.Schema({
   // Progressive unlock: keys of completed videos, each `${classIndex}:${videoIndex}`.
   completedVideos: { type: [String], default: [] },
   createdAt: { type: Date, default: Date.now },
+  // Access expires one year after purchase (see src/lib/enrollment.js).
+  expiresAt: { type: Date, default: null },
 });
 
 // Force a fresh schema on hot-reload so newly added fields (completedVideos)

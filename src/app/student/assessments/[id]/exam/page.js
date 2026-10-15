@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   HelpCircle, FileText, CheckCircle2, ArrowRight, ArrowLeft, Clock,
-  ShieldAlert, Loader2, ClipboardCheck, Ban,
+  ShieldAlert, Loader2, ClipboardCheck, Ban, RefreshCw,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
@@ -23,6 +23,7 @@ export default function ExamPage() {
   const [mcqAnswers, setMcqAnswers] = useState({});
   const [mcqIndex, setMcqIndex] = useState(0);
   const [mcqResult, setMcqResult] = useState(null);
+  const [writtenResult, setWrittenResult] = useState(null);
   const mcqSubmittedRef = useRef(false);
 
   const [writtenAnswers, setWrittenAnswers] = useState({});
@@ -87,7 +88,7 @@ export default function ExamPage() {
     try {
       const res = await apiFetch(`/api/student/assessments/${id}/mcq`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers: qs.map((_, i) => (mcqAnswers[i] ?? -1)) }),
+        body: JSON.stringify({ answers: qs.map((q, i) => (q.multiple ? (Array.isArray(mcqAnswers[i]) ? mcqAnswers[i] : []) : (mcqAnswers[i] ?? -1))) }),
       });
       const d = await res.json();
       if (res.ok) { mcqSubmittedRef.current = true; setMcqResult(d); return true; }
@@ -103,6 +104,8 @@ export default function ExamPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answers: qs.map((_, i) => (writtenAnswers[i] || "")) }),
       });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) setWrittenResult(d);
       return res.ok;
     } catch { return false; }
   };
@@ -131,6 +134,15 @@ export default function ExamPage() {
     await submitMcq();
     await submitWritten();
     setPhase("done");
+  };
+
+  const doRetry = async () => {
+    setSubmitting(true);
+    try {
+      const res = await apiFetch(`/api/student/assessments/${id}/retry`, { method: "POST" });
+      if (res.ok) { if (typeof window !== "undefined") window.location.reload(); }
+      else { const d = await res.json().catch(() => ({})); setErr(d.error || "Could not start the retry."); }
+    } finally { setSubmitting(false); }
   };
 
   /* ── Shells ── */
@@ -225,7 +237,11 @@ export default function ExamPage() {
           {assessment.writtenEnabled && (
             <div className="rounded-xl border pf-border p-4 flex items-center justify-between">
               <span className="text-sm font-semibold flex items-center gap-2"><FileText size={15} className="text-[#db254f]" /> Written Exam</span>
-              <span className="text-sm text-amber-500 font-medium inline-flex items-center gap-1"><Clock size={13} /> Awaiting grading</span>
+              {writtenResult?.aiGraded ? (
+                <span className="text-sm font-bold">{writtenResult.writtenScore}/{writtenResult.writtenTotal} <span className="text-xs pf-muted font-medium">· AI graded</span></span>
+              ) : (
+                <span className="text-sm text-amber-500 font-medium inline-flex items-center gap-1"><Clock size={13} /> Awaiting grading</span>
+              )}
             </div>
           )}
           {assessment.interviewEnabled && (
@@ -234,6 +250,21 @@ export default function ExamPage() {
             </div>
           )}
         </div>
+        {/* MCQ-only exams know pass/fail immediately → offer retry here. */}
+        {assessment.mcqEnabled && !assessment.writtenEnabled && !assessment.interviewEnabled && mcqResult && !mcqResult.passed && assessment.setBEnabled && (assessment.attempt || 1) < 2 && (
+          <div className="mt-5 rounded-xl p-4 text-left" style={{ background: "rgba(245,158,11,0.10)" }}>
+            <p className="text-sm font-semibold text-amber-600">You didn&apos;t pass this time.</p>
+            <p className="text-xs pf-muted mt-1">You get one more attempt with a different set of questions (Set B).</p>
+            <button onClick={doRetry} disabled={submitting} className="btn-pill mt-3 inline-flex items-center gap-1.5 text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 transition disabled:opacity-60"><RefreshCw size={15} /> {submitting ? "Starting…" : "Retry with Set B"}</button>
+          </div>
+        )}
+        {/* When written/interview are involved, pass/fail is the combined score
+            decided after grading — tell the student to check back. */}
+        {(assessment.writtenEnabled || assessment.interviewEnabled) && (
+          <div className="mt-5 rounded-xl p-4 text-left text-sm pf-muted" style={{ background: "rgba(var(--fg-rgb),0.04)" }}>
+            Your final result is the <span className="font-semibold" style={{ color: "var(--fg)" }}>combined score</span> of all sections (pass ≥ {assessment.passingScore}%). It appears on the Assessments page once your written{assessment.interviewEnabled ? " and interview" : ""} {assessment.interviewEnabled ? "are" : "is"} graded — and you can retry with Set B there if you don&apos;t pass.
+          </div>
+        )}
         <button onClick={() => router.push("/student/assessments")} className="btn-pill mt-6 inline-flex items-center gap-1.5 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-5 py-2.5 transition"><ArrowLeft size={14} /> Back to Assessments</button>
       </div>
     </Screen>
@@ -285,9 +316,17 @@ function McqSection({ assessment, answers, setAnswers, index, setIndex, onFinish
   const qs = assessment.mcqQuestions || [];
   const total = qs.length;
   const q = qs[index];
-  const answeredCount = Object.keys(answers).length;
-  const answeredCurrent = answers[index] != null;
+  const isAnswered = (qi) => { const a = answers[qi]; return qs[qi]?.multiple ? (Array.isArray(a) && a.length > 0) : (a != null); };
+  const answeredCount = qs.filter((_, qi) => isAnswered(qi)).length;
+  const answeredCurrent = isAnswered(index);
   const isLast = index === total - 1;
+  const toggleOption = (oi) => setAnswers((a) => {
+    if (q.multiple) {
+      const cur = Array.isArray(a[index]) ? a[index] : [];
+      return { ...a, [index]: cur.includes(oi) ? cur.filter((x) => x !== oi) : [...cur, oi] };
+    }
+    return { ...a, [index]: oi };
+  });
 
   return (
     <div>
@@ -301,22 +340,34 @@ function McqSection({ assessment, answers, setAnswers, index, setIndex, onFinish
       <div className="flex gap-1.5 mb-6">
         {qs.map((_, i) => (
           <button key={i} onClick={() => setIndex(i)} aria-label={`Question ${i + 1}`} className="flex-1 h-1.5 transition-all"
-            style={{ borderRadius: 9999, background: i === index ? "#db254f" : answers[i] != null ? "rgba(219,37,79,0.45)" : "rgba(var(--fg-rgb),0.1)" }} />
+            style={{ borderRadius: 9999, background: i === index ? "#db254f" : isAnswered(i) ? "rgba(219,37,79,0.45)" : "rgba(var(--fg-rgb),0.1)" }} />
         ))}
       </div>
 
-      <p className="font-bold text-xl leading-snug mb-6">{q?.question}</p>
-      <div className="space-y-3">
+      <p className="font-bold text-xl leading-snug mb-2">{q?.question}</p>
+      {q?.multiple && <p className="text-xs font-semibold text-[#db254f] mb-2 inline-flex items-center gap-1.5"><CheckCircle2 size={13} /> Select ALL correct options</p>}
+      {q?.media && (
+        <div className="mb-5 mt-1">
+          {q.media.startsWith("data:application/pdf") ? (
+            <iframe src={`${q.media}#toolbar=0`} title="Question attachment" className="w-full h-80 rounded-xl border pf-border bg-white" />
+          ) : (
+            <img src={q.media} alt="Question attachment" className="max-h-80 rounded-xl border pf-border object-contain" />
+          )}
+        </div>
+      )}
+      <div className={`space-y-3 ${q?.multiple ? "" : "mt-4"}`}>
         {(q?.options || []).map((opt, oi) => {
-          const active = answers[index] === oi;
+          const active = q.multiple ? (Array.isArray(answers[index]) && answers[index].includes(oi)) : answers[index] === oi;
           return (
-            <button key={oi} type="button" onClick={() => setAnswers((a) => ({ ...a, [index]: oi }))}
+            <button key={oi} type="button" onClick={() => toggleOption(oi)}
               className="w-full flex items-center gap-4 border-2 px-4 py-4 text-left transition"
               style={active
                 ? { borderRadius: "1rem", borderColor: "#db254f", background: "linear-gradient(90deg, rgba(219,37,79,0.14), rgba(229,107,133,0.05))" }
                 : { borderRadius: "1rem", borderColor: "rgba(var(--fg-rgb),0.1)" }}>
               <span className={`w-11 h-11 flex items-center justify-center text-base font-extrabold shrink-0 transition ${active ? "text-white shadow-md shadow-rose-500/30" : "pf-faint"}`}
-                style={active ? { borderRadius: "0.75rem", background: "linear-gradient(135deg, #db254f, #e56b85)" } : { borderRadius: "0.75rem", background: "rgba(var(--fg-rgb),0.06)" }}>
+                style={active
+                  ? { borderRadius: q.multiple ? "0.6rem" : "0.75rem", background: "linear-gradient(135deg, #db254f, #e56b85)" }
+                  : { borderRadius: q.multiple ? "0.6rem" : "0.75rem", background: "rgba(var(--fg-rgb),0.06)" }}>
                 {String.fromCharCode(65 + oi)}
               </span>
               <span className={`flex-1 ${active ? "font-semibold" : "font-medium"}`} style={{ color: "var(--fg)" }}>{opt}</span>
@@ -355,6 +406,15 @@ function WrittenSection({ assessment, answers, setAnswers, onSubmit }) {
         {qs.map((q, qi) => (
           <div key={qi} className="pf-card p-4">
             <p className="font-semibold text-sm mb-2.5"><span className="text-[#db254f]">Q{qi + 1}.</span> {q.question} <span className="pf-faint font-normal">({q.maxMarks} marks)</span></p>
+            {q.media && (
+              <div className="mb-3">
+                {q.media.startsWith("data:application/pdf") ? (
+                  <iframe src={`${q.media}#toolbar=0`} title="Question attachment" className="w-full h-72 rounded-xl border pf-border bg-white" />
+                ) : (
+                  <img src={q.media} alt="Question attachment" className="max-h-72 rounded-xl border pf-border object-contain" />
+                )}
+              </div>
+            )}
             <textarea rows={5}
               className="w-full rounded-xl border pf-border bg-transparent px-3 py-2.5 text-sm outline-none focus:border-[#db254f] resize-y select-text"
               placeholder="Type your answer here…"

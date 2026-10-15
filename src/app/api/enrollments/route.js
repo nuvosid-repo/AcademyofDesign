@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { resolveUseMock, mockEnrollments } from "@/lib/db";
+import { resolveUseMock, mockEnrollments, mockCourses } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { oneYearFromNow, courseEndExpiry } from "@/lib/enrollment";
 import Enrollment from "@/models/Enrollment";
+import Course from "@/models/Course";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,12 +49,19 @@ export async function POST(request) {
     studentEmail: auth?.email || b.studentEmail || "",
     amount: Number(b.amount) || 0,
     paymentId: (b.paymentId || "").toString(),
+    expiresAt: oneYearFromNow(),
   };
   if (!doc.courseId && !doc.courseTitle) {
     return NextResponse.json({ error: "Course is required" }, { status: 400 });
   }
 
   const useMock = await resolveUseMock();
+  // Course end date (if set by admin) caps access; else 1 year.
+  const course = useMock
+    ? mockCourses().find((c) => ((c._id && c._id.toString()) || c.id) === doc.courseId || c.title === doc.courseTitle)
+    : (doc.courseId ? await Course.findById(doc.courseId).select("endDate").lean().catch(() => null) : null)
+      || (doc.courseTitle ? await Course.findOne({ title: doc.courseTitle }).select("endDate").lean().catch(() => null) : null);
+  doc.expiresAt = courseEndExpiry(course);
   if (useMock) {
     const created = { _id: "en_" + Date.now(), ...doc, createdAt: new Date() };
     mockEnrollments().unshift(created);

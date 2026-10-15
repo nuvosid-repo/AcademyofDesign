@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 const FIELDS = [
   "title", "shortDescription", "instructor", "instructors", "price", "lessons", "duration",
-  "enrolledTillDate", "thumbnail", "subscriptionType",
+  "enrolledTillDate", "startDate", "endDate", "thumbnail", "subscriptionType",
   "banner", "overview", "introVideo", "demoVideo", "classes", "videos", "materials", "status", "studentsEnrolled",
   "category", "level", "description",
 ];
@@ -25,6 +25,8 @@ function serialize(c) {
     lessons: c.lessons || "",
     duration: c.duration || "",
     enrolledTillDate: c.enrolledTillDate || "",
+    startDate: c.startDate || "",
+    endDate: c.endDate || "",
     thumbnail: c.thumbnail || "",
     subscriptionType: c.subscriptionType || "B2C",
     banner: c.banner || "",
@@ -73,7 +75,9 @@ export async function GET(request) {
     return NextResponse.json({ courses });
   }
 
-  const docs = await Course.find().sort({ createdAt: -1 }).lean();
+  // Exclude heavy base64 fields (banner/thumbnail/class videos & materials) from
+  // the list — the admin table doesn't show them; they load on edit via GET /:id.
+  const docs = await Course.find().select("-banner -thumbnail -classes -videos -materials").sort({ createdAt: -1 }).lean();
   const enr = await Enrollment.find().select("courseId courseTitle").lean();
   const courses = docs.map((c) => {
     const s = serialize(c);

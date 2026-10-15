@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockEnrollments, mockAssessments, mockAssessmentResults } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
-import { serializeAssessment } from "@/lib/assessmentFields";
+import { serializeAssessment, pickSet, combinedResult } from "@/lib/assessmentFields";
+import { isEnrollmentActive } from "@/lib/enrollment";
 import Enrollment from "@/models/Enrollment";
 import Assessment from "@/models/Assessment";
 import AssessmentResult from "@/models/AssessmentResult";
@@ -24,7 +25,7 @@ export async function GET(request) {
         AssessmentResult.find({ studentId: auth.id }).lean(),
       ]);
 
-  const titles = new Set(enrollments.map((e) => e.courseTitle).filter(Boolean));
+  const titles = new Set(enrollments.filter((e) => isEnrollmentActive(e)).map((e) => e.courseTitle).filter(Boolean));
   const resultByAid = {};
   for (const r of results) resultByAid[r.assessmentId] = r;
 
@@ -33,27 +34,40 @@ export async function GET(request) {
     .map((a) => {
       const s = serializeAssessment(a);
       const r = resultByAid[s.id] || {};
+      // Which set the student is on: attempt 2 → Set B, else Set A.
+      const attempt = r.attempt || 1;
+      const examSet = r.examSet || (attempt >= 2 ? "B" : "A");
+      const setQ = pickSet(s, examSet);
+      // Pass/fail is the COMBINED % across all enabled sections, decided only
+      // once every section is scored. Retry (Set B) unlocks on a combined fail.
+      const combined = combinedResult(s, r);
+      const canRetry = !!(s.setBEnabled && combined.ready && !combined.passed && attempt < 2);
       return {
         id: s.id,
         title: s.title,
         course: s.course,
         description: s.description,
-        // MCQ (questions/options only — no correct answers)
+        // Attempt / retry state
+        attempt, examSet, setBEnabled: s.setBEnabled, canRetry,
+        combinedReady: combined.ready, combinedPercentage: combined.percentage, combinedPassed: combined.passed,
+        combinedScore: combined.totalScore, combinedTotal: combined.totalMax,
+        // MCQ (questions/options only — no correct answers), from the active set
         mcqEnabled: s.mcqEnabled,
-        mcqCount: (s.questions || []).length,
-        mcqQuestions: (s.questions || []).map((q) => ({ question: q.question || "", options: q.options || [] })),
+        mcqCount: (setQ.questions || []).length,
+        mcqQuestions: (setQ.questions || []).map((q) => ({ question: q.question || "", options: q.options || [], multiple: !!q.multiple, media: q.media || "" })),
         passingScore: s.passingScore,
         mcqDone: !!r.mcqDone,
         mcqScore: r.mcqScore || 0, mcqTotal: r.mcqTotal || 0, mcqPercentage: r.mcqPercentage || 0,
-        // Written
+        // Written (from the active set)
         writtenEnabled: s.writtenEnabled,
-        writtenQuestions: (s.writtenQuestions || []).map((q) => ({ question: q.question || "", maxMarks: q.maxMarks || 0 })),
+        writtenQuestions: (setQ.writtenQuestions || []).map((q) => ({ question: q.question || "", maxMarks: q.maxMarks || 0, media: q.media || "" })),
         writtenSubmitted: !!r.writtenSubmitted,
         writtenGraded: !!r.writtenGraded,
         writtenScore: r.writtenScore || 0, writtenTotal: r.writtenTotal || 0,
         // Interview
         interviewEnabled: s.interviewEnabled,
         interviewDate: s.interviewDate, interviewTime: s.interviewTime, interviewLink: s.interviewLink, interviewer: s.interviewer,
+        interviewQuestions: (setQ.interviewQuestions || []).map((q) => ({ question: q.question || "", maxMarks: q.maxMarks || 0, media: q.media || "" })),
         interviewGraded: !!r.interviewGraded,
         interviewScore: r.interviewScore || 0, interviewTotal: r.interviewTotal || 0,
       };

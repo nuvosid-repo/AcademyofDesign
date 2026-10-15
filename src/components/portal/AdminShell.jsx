@@ -6,10 +6,11 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   PieChart, Home, BookOpen, ClipboardList, ClipboardCheck, Users,
   CreditCard, ChevronDown, ChevronUp, Search, Bell, Presentation,
-  LogOut, Menu, X,
+  LogOut, Menu, X, Sun, Moon, FileText,
 } from "lucide-react";
 import RequireRole from "./RequireRole";
 import { useSession } from "@/context/SessionContext";
+import { useTheme } from "@/context/ThemeContext";
 
 // Admin sidebar menu. Items with `children` render as collapsible groups.
 const NAV = [
@@ -36,11 +37,13 @@ const NAV = [
     label: "Student", icon: Users,
     children: [{ href: "/admin/manage-students", label: "All Students" }],
   },
+  { href: "/admin/resumes", label: "Resume", icon: FileText },
   { href: "/admin/transactions", label: "All Transactions", icon: CreditCard },
 ];
 
 function Sidebar({ onNavigate }) {
   const pathname = usePathname();
+  const { theme } = useTheme();
   const isActive = (href) => !!href && (pathname === href || pathname.startsWith(href + "/"));
   const groupActive = (item) => item.children?.some((c) => isActive(c.href));
 
@@ -54,7 +57,7 @@ function Sidebar({ onNavigate }) {
     <div className="flex h-full flex-col bg-white">
       <Link href="/" className="flex items-center px-6 h-[70px] border-b border-gray-100">
         <Image
-          src="/assets/logo_black.png"
+          src={theme === "dark" ? "/assets/logo.png" : "/assets/logo_black.png"}
           alt="Nuvosid"
           width={150}
           height={38}
@@ -135,6 +138,7 @@ function Sidebar({ onNavigate }) {
 function AdminChrome({ title, subtitle, children }) {
   const router = useRouter();
   const { user, logout } = useSession();
+  const { theme, toggleTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -153,7 +157,7 @@ function AdminChrome({ title, subtitle, children }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800 flex" style={{ "--fg-rgb": "31,41,55" }}>
+    <div className="admin-shell min-h-screen bg-gray-50 text-gray-800 flex" style={{ "--fg-rgb": "31,41,55" }}>
       {/* Sidebar (desktop) */}
       <aside className="hidden lg:block w-64 shrink-0 border-r border-gray-100">
         <div className="sticky top-0 h-screen">
@@ -200,6 +204,10 @@ function AdminChrome({ title, subtitle, children }) {
                   className="bg-transparent text-sm outline-none w-full placeholder:text-gray-400"
                 />
               </div>
+
+              <button onClick={toggleTheme} className="w-10 h-10 rounded-full btn-pill bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-[#db254f] hover:border-rose-200 transition" aria-label="Toggle theme" title={theme === "dark" ? "Switch to light" : "Switch to dark"}>
+                {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
 
               <button className="relative w-10 h-10 rounded-full btn-pill bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-[#db254f] hover:border-rose-200 transition" aria-label="Notifications">
                 <Bell size={18} />

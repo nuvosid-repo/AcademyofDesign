@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockAssessments, mockEnrollments, mockAssessmentResults } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { isAIConfigured, gradeWrittenAnswers } from "@/lib/ai";
 import Assessment from "@/models/Assessment";
 import Enrollment from "@/models/Enrollment";
 import AssessmentResult from "@/models/AssessmentResult";
@@ -32,11 +33,41 @@ export async function POST(request, { params }) {
     : await AssessmentResult.findOne({ studentId: auth.id, assessmentId: id }).lean();
   if (existing?.writtenSubmitted) return NextResponse.json({ error: "You have already submitted the written exam." }, { status: 400 });
 
-  const writtenAnswers = (a.writtenQuestions || []).map((q, i) => ({ question: q.question || "", answer: (answers[i] || "").toString() }));
+  // Use the question set the student is on (Set B on a 2nd attempt).
+  const attempt = existing?.attempt || 1;
+  const examSet = existing?.examSet || (attempt >= 2 ? "B" : "A");
+  const useB = examSet === "B" && a.setBEnabled;
+  const writtenQs = (useB && (a.writtenQuestionsB || []).length) ? a.writtenQuestionsB : (a.writtenQuestions || []);
+  const writtenAnswers = writtenQs.map((q, i) => ({ question: q.question || "", answer: (answers[i] || "").toString() }));
   const setFields = {
     studentId: auth.id, studentName: auth.name || "", assessmentId: id, assessmentTitle: a.title || "", course: a.course || "", type: "Assessment",
+    attempt, examSet,
     writtenAnswers, writtenSubmitted: true, updatedAt: new Date(),
   };
+
+  // Auto-grade with Claude (best-effort). If AI isn't configured or errors,
+  // the submission is still saved and an admin can grade/override later.
+  let aiGraded = false;
+  if (isAIConfigured()) {
+    try {
+      const grades = await gradeWrittenAnswers(
+        writtenQs.map((q) => ({ question: q.question, maxMarks: q.maxMarks, modelAnswer: q.modelAnswer })),
+        answers,
+        { course: a.course, title: a.title }
+      );
+      const breakdown = writtenQs.map((q, i) => ({
+        question: q.question || "", maxMarks: Number(q.maxMarks) || 0,
+        marks: grades[i]?.marks ?? 0, feedback: grades[i]?.feedback || "", gradedBy: "ai",
+      }));
+      setFields.writtenBreakdown = breakdown;
+      setFields.writtenScore = breakdown.reduce((n, b) => n + b.marks, 0);
+      setFields.writtenTotal = breakdown.reduce((n, b) => n + b.maxMarks, 0);
+      setFields.writtenGraded = true;
+      aiGraded = true;
+    } catch (e) {
+      console.error("AI written grading failed:", e?.message);
+    }
+  }
 
   if (useMock) {
     const store = mockAssessmentResults();
@@ -47,5 +78,9 @@ export async function POST(request, { params }) {
     await AssessmentResult.findOneAndUpdate({ studentId: auth.id, assessmentId: id }, { $set: setFields, $setOnInsert: { createdAt: new Date() } }, { upsert: true });
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({
+    success: true, aiGraded,
+    writtenScore: setFields.writtenScore ?? null,
+    writtenTotal: setFields.writtenTotal ?? null,
+  });
 }

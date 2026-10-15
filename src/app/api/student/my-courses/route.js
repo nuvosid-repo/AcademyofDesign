@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockEnrollments, mockCourses, mockStudents } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { isEnrollmentActive, enrollmentExpiry } from "@/lib/enrollment";
 import Enrollment from "@/models/Enrollment";
 import Course from "@/models/Course";
 import Student from "@/models/Student";
@@ -49,8 +50,13 @@ export async function GET(request) {
 
   const studentB2B = isB2BStudent(student?.subscriptionType);
 
-  const ids = new Set(enrollments.map((e) => e.courseId).filter(Boolean));
-  const titles = new Set(enrollments.map((e) => e.courseTitle).filter(Boolean));
+  // Only non-expired enrollments grant access; expired ones fall back to Explore
+  // so the student can re-purchase.
+  const activeEnrollments = enrollments.filter((e) => isEnrollmentActive(e));
+  const ids = new Set(activeEnrollments.map((e) => e.courseId).filter(Boolean));
+  const titles = new Set(activeEnrollments.map((e) => e.courseTitle).filter(Boolean));
+  const enrollByCourse = {}; const enrollByTitle = {};
+  for (const e of activeEnrollments) { if (e.courseId) enrollByCourse[e.courseId] = e; if (e.courseTitle) enrollByTitle[e.courseTitle] = e; }
 
   const withId = allCourses.map((c) => ({ c, id: (c._id && c._id.toString()) || c.id }));
   const isEnrolled = ({ c, id }) => ids.has(id) || titles.has(c.title);
@@ -58,8 +64,10 @@ export async function GET(request) {
   // B2B courses are visible only to B2B students; B2C courses are visible to all.
   const canSee = ({ c }) => studentB2B || !isB2BCourse(c);
 
-  // Enrolled courses always stay visible (the student already paid for them).
-  const enrolled = withId.filter(isEnrolled).map(({ c, id }) => card(c, id));
+  const enrolled = withId.filter(isEnrolled).map(({ c, id }) => {
+    const e = enrollByCourse[id] || enrollByTitle[c.title];
+    return { ...card(c, id), expiresAt: e ? enrollmentExpiry(e).toISOString() : null };
+  });
   const explore = withId.filter((x) => !isEnrolled(x) && isActive(x) && canSee(x)).map(({ c, id }) => card(c, id));
 
   return NextResponse.json({ enrolled, explore });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockAssessments } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
-import { buildAssessmentDoc } from "@/lib/assessmentFields";
+import { buildAssessmentDoc, serializeAssessment } from "@/lib/assessmentFields";
 import Assessment from "@/models/Assessment";
 
 export const runtime = "nodejs";
@@ -12,6 +12,21 @@ async function requireAdmin(request) {
   if (!auth) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   if (auth.role !== "admin") return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   return { auth };
+}
+
+// GET /api/assessments/:id — full assessment (incl. question media base64) for
+// the admin edit form. The list endpoint omits media for speed.
+export async function GET(request, { params }) {
+  const auth = await getAuthUser(request);
+  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (auth.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { id } = await params;
+  const useMock = await resolveUseMock();
+  const a = useMock
+    ? mockAssessments().find((x) => ((x._id && x._id.toString()) || x.id) === id)
+    : await Assessment.findById(id).lean().catch(() => null);
+  if (!a) return NextResponse.json({ error: "Assessment not found" }, { status: 404 });
+  return NextResponse.json({ assessment: serializeAssessment(a) });
 }
 
 export async function PUT(request, { params }) {

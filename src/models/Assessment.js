@@ -4,8 +4,11 @@ import mongoose from "mongoose";
 const QuestionSchema = new mongoose.Schema(
   {
     question: { type: String, default: "" },
-    options: { type: [String], default: [] },
-    correctIndex: { type: Number, default: 0 },
+    options: { type: [String], default: [] }, // any number of options (2+)
+    correctIndex: { type: Number, default: 0 }, // legacy single-answer (kept for back-compat)
+    correctIndexes: { type: [Number], default: [] }, // one or more correct option indexes
+    multiple: { type: Boolean, default: false }, // true = multiple correct answers allowed
+    media: { type: String, default: "" }, // optional image/PDF (data URL) shown with the question
   },
   { _id: false }
 );
@@ -15,6 +18,8 @@ const MarkedQuestionSchema = new mongoose.Schema(
   {
     question: { type: String, default: "" },
     maxMarks: { type: Number, default: 10 },
+    modelAnswer: { type: String, default: "" }, // optional reference answer to improve AI grading
+    media: { type: String, default: "" }, // optional image/PDF (data URL) shown with the question
   },
   { _id: false }
 );
@@ -44,6 +49,13 @@ const AssessmentSchema = new mongoose.Schema({
   interviewLink: { type: String, default: "" },
   interviewer: { type: String, default: "" },
   interviewQuestions: { type: [MarkedQuestionSchema], default: [] },
+
+  // ── Second attempt (Set B) — same sections/structure, different questions.
+  // Served on a student's 2nd attempt after they fail the MCQ on Set A. ──
+  setBEnabled: { type: Boolean, default: false },
+  questionsB: { type: [QuestionSchema], default: [] },
+  writtenQuestionsB: { type: [MarkedQuestionSchema], default: [] },
+  interviewQuestionsB: { type: [MarkedQuestionSchema], default: [] },
 
   status: { type: String, enum: ["Active", "Inactive"], default: "Active" },
   createdAt: { type: Date, default: Date.now },

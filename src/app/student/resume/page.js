@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Plus, Trash2, Download, Mail, Phone, MapPin, Globe, GraduationCap, Briefcase, Sparkles } from "lucide-react";
+import { Plus, Trash2, Download, Save, Check, Loader2, GraduationCap, Briefcase, Sparkles } from "lucide-react";
 import StudentShell from "@/components/portal/StudentShell";
 import { useSession } from "@/context/SessionContext";
+import { apiFetch } from "@/lib/api";
 
 const BLANK = {
   name: "", title: "", email: "", phone: "", location: "", website: "",
@@ -17,16 +18,47 @@ const STORAGE_KEY = "nuvosid_resume";
 export default function ResumeBuilderPage() {
   const { user } = useSession();
   const [r, setR] = useState(BLANK);
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState("");
   const printRef = useRef(null);
 
-  // Load saved draft (or prefill name from session).
+  // Load the saved resume from the DB; fall back to a local draft / session name.
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) { setR({ ...BLANK, ...JSON.parse(saved) }); return; }
-    } catch {}
-    if (user?.name) setR((x) => ({ ...x, name: user.name }));
+    const fromLocal = () => {
+      try { const saved = localStorage.getItem(STORAGE_KEY); if (saved) { setR({ ...BLANK, ...JSON.parse(saved) }); return true; } } catch {}
+      return false;
+    };
+    apiFetch("/api/student/resume", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((d) => {
+        if (d.resume) {
+          const x = d.resume;
+          setR({
+            ...BLANK,
+            name: x.name, title: x.title, email: x.email, phone: x.phone, location: x.location, website: x.website, summary: x.summary, skills: x.skills,
+            education: x.education?.length ? x.education : BLANK.education,
+            experience: x.experience?.length ? x.experience : BLANK.experience,
+          });
+          return;
+        }
+        if (!fromLocal() && user?.name) setR((prev) => ({ ...prev, name: user.name }));
+      })
+      .catch(() => { fromLocal(); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  const save = async () => {
+    setSaving(true); setSavedMsg("");
+    try {
+      const res = await apiFetch("/api/student/resume", {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(r),
+      });
+      const d = await res.json();
+      if (res.ok) setSavedMsg(d.resume?.completed ? "Saved — your resume is complete ✓" : "Saved — fill all sections to mark it complete");
+      else setSavedMsg(d.error || "Could not save");
+    } catch { setSavedMsg("Could not save"); }
+    finally { setSaving(false); }
+  };
 
   // Persist draft.
   useEffect(() => {
@@ -53,7 +85,7 @@ export default function ResumeBuilderPage() {
         *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
         body{padding:40px;color:#1a1a1a;line-height:1.5;}
         h1{font-size:26px;} h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#db254f;border-bottom:2px solid #f0d3da;padding-bottom:4px;margin:18px 0 10px;}
-        h3{font-size:15px;} .muted{color:#666;} .row{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:#555;margin-top:6px;}
+        h3{font-size:15px;} .muted{color:#666;} .title{color:#db254f;font-weight:600;margin-top:2px;} .row{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:#555;margin-top:6px;}
         .item{margin-bottom:10px;} .chip{display:inline-block;background:#fce8ee;color:#db254f;border-radius:6px;padding:3px 10px;font-size:12px;margin:0 6px 6px 0;}
         .between{display:flex;justify-content:space-between;gap:12px;} .period{color:#888;font-size:12px;white-space:nowrap;}
         p{font-size:13px;} .sub{color:#666;font-size:13px;}
@@ -73,9 +105,15 @@ export default function ResumeBuilderPage() {
           <h2 className="text-2xl font-bold mb-1 flex items-center gap-2"><Sparkles size={20} className="text-[#db254f]" /> Resume Builder</h2>
           <p className="pf-muted">Fill in your details — your resume updates live. Download it as a PDF when ready.</p>
         </div>
-        <button onClick={download} className="inline-flex items-center gap-2 rounded-full bg-[#db254f] hover:bg-[#b91d40] text-white text-sm font-semibold px-5 py-2.5 shadow-sm shadow-rose-500/30 transition">
-          <Download size={16} /> Download PDF
-        </button>
+        <div className="flex items-center gap-2.5">
+          {savedMsg && <span className="text-xs font-medium text-emerald-500 inline-flex items-center gap-1"><Check size={13} /> {savedMsg}</span>}
+          <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-full border pf-border px-5 py-2.5 text-sm font-semibold pf-hover transition disabled:opacity-60">
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} className="text-[#db254f]" />} {saving ? "Saving…" : "Save Resume"}
+          </button>
+          <button onClick={download} className="inline-flex items-center gap-2 rounded-full bg-[#db254f] hover:bg-[#b91d40] text-white text-sm font-semibold px-5 py-2.5 shadow-sm shadow-rose-500/30 transition">
+            <Download size={16} /> Download PDF
+          </button>
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
@@ -146,9 +184,9 @@ export default function ResumeBuilderPage() {
         {/* ── Live preview ── */}
         <div className="lg:sticky lg:top-24 h-fit">
           <div className="rounded-2xl border pf-border overflow-hidden shadow-lg">
-            <div ref={printRef} className="bg-white text-gray-800 p-8" style={{ minHeight: "60vh" }}>
-              <h1 className="text-2xl font-extrabold text-gray-900">{r.name || "Your Name"}</h1>
-              {r.title && <p style={{ color: "#db254f" }} className="font-semibold">{r.title}</p>}
+            <div ref={printRef} className="resume-paper" style={{ minHeight: "60vh" }}>
+              <h1>{r.name || "Your Name"}</h1>
+              {r.title && <p className="title">{r.title}</p>}
               <div className="row">
                 {r.email && <span>✉ {r.email}</span>}
                 {r.phone && <span>☎ {r.phone}</span>}

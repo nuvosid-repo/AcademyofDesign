@@ -3,7 +3,8 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, ChevronDown, Sun, Moon, Menu, X, User2 } from "lucide-react";
+import { LogOut, ChevronDown, Sun, Moon, Menu, X, User2, ArrowLeft } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 import { useSession } from "@/context/SessionContext";
 import { useTheme } from "@/context/ThemeContext";
 
@@ -18,7 +19,21 @@ export default function PortalShell({ brand, subtitle, nav, loginPath, children 
   const { theme, toggleTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [avatar, setAvatar] = useState("");
   const menuRef = useRef(null);
+
+  // Load the student's profile image for the avatar; update live when they
+  // save a new photo (the profile page dispatches a "profile-image" event).
+  useEffect(() => {
+    let alive = true;
+    apiFetch("/api/student/profile", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive && d?.profile) setAvatar(d.profile.image || ""); })
+      .catch(() => {});
+    const onImg = (e) => setAvatar(e.detail || "");
+    window.addEventListener("profile-image", onImg);
+    return () => { alive = false; window.removeEventListener("profile-image", onImg); };
+  }, [user?.id]);
 
   // Close the user menu on outside click.
   useEffect(() => {
@@ -48,6 +63,14 @@ export default function PortalShell({ brand, subtitle, nav, loginPath, children 
           <p className="text-[11px] uppercase tracking-[0.2em] text-[#db254f] mt-2 font-semibold">{brand}</p>
         </Link>
         <button className="md:hidden pf-muted" onClick={() => setMobileOpen(false)} aria-label="Close menu"><X size={20} /></button>
+      </div>
+
+      {/* Back to the public website */}
+      <div className="px-3 pt-3">
+        <Link href="/" onClick={() => setMobileOpen(false)}
+          className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium pf-nav pf-hover transition">
+          <ArrowLeft size={16} className="text-[#db254f]" /> Back to Website
+        </Link>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
@@ -138,9 +161,13 @@ export default function PortalShell({ brand, subtitle, nav, loginPath, children 
                 onClick={() => setMenuOpen((o) => !o)}
                 className={`flex items-center gap-2.5 rounded-full pl-1 pr-1.5 sm:pr-2.5 py-1 border transition ${menuOpen ? "pf-nav-active" : "pf-card"}`}
               >
-                <span className="w-9 h-9 rounded-full bg-gradient-to-br from-[#db254f] to-[#e56b85] flex items-center justify-center text-sm font-bold text-white shadow-sm shadow-rose-500/30 shrink-0">
-                  {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
-                </span>
+                {avatar ? (
+                  <img src={avatar} alt={user?.name || "Profile"} className="w-9 h-9 rounded-full object-cover shrink-0" />
+                ) : (
+                  <span className="w-9 h-9 rounded-full bg-gradient-to-br from-[#db254f] to-[#e56b85] flex items-center justify-center text-sm font-bold text-white shadow-sm shadow-rose-500/30 shrink-0">
+                    {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
+                  </span>
+                )}
                 <span className="hidden sm:flex flex-col items-start leading-tight">
                   <span className="text-sm font-semibold truncate max-w-[9rem]">{user?.name || "User"}</span>
                   <span className="text-[11px] pf-faint capitalize">{user?.role}</span>
@@ -151,9 +178,13 @@ export default function PortalShell({ brand, subtitle, nav, loginPath, children 
               {menuOpen && (
                 <div className="absolute right-0 mt-2 w-60 pf-card overflow-hidden z-40 p-0">
                   <div className="flex items-center gap-3 px-4 py-3.5 border-b pf-border" style={{ background: "linear-gradient(90deg, rgba(219,37,79,0.10), transparent)" }}>
-                    <span className="w-10 h-10 rounded-full bg-gradient-to-br from-[#db254f] to-[#e56b85] flex items-center justify-center font-bold text-white shrink-0">
-                      {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
-                    </span>
+                    {avatar ? (
+                      <img src={avatar} alt={user?.name || "Profile"} className="w-10 h-10 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <span className="w-10 h-10 rounded-full bg-gradient-to-br from-[#db254f] to-[#e56b85] flex items-center justify-center font-bold text-white shrink-0">
+                        {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
+                      </span>
+                    )}
                     <div className="min-w-0">
                       <p className="text-sm font-semibold truncate">{user?.name || "User"}</p>
                       <p className="text-xs pf-faint capitalize">{user?.role}</p>

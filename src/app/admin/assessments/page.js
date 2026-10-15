@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Pencil, Trash2, ClipboardCheck, Plus, Check, HelpCircle, FileText, Users, ExternalLink, Award } from "lucide-react";
+import { Pencil, Trash2, ClipboardCheck, Plus, Check, HelpCircle, FileText, Users, ExternalLink, Award, RefreshCw, X, Image as ImageIcon } from "lucide-react";
 import Link from "next/link";
 import AdminShell from "@/components/portal/AdminShell";
 import { useConfirm } from "@/components/portal/ConfirmDialog";
@@ -9,12 +9,17 @@ import { apiFetch } from "@/lib/api";
 
 const STATUSES = ["Active", "Inactive"];
 
+const blankMCQ = () => ({ question: "", options: ["", "", "", ""], correctIndex: 0, correctIndexes: [0], multiple: false, media: "" });
+const blankMarked = () => ({ question: "", maxMarks: 10, modelAnswer: "", media: "" });
+
 const EMPTY = {
   title: "", course: "", description: "", status: "Active",
-  mcqEnabled: false, questions: [{ question: "", options: ["", "", "", ""], correctIndex: 0 }], passingScore: 60,
-  writtenEnabled: false, writtenQuestions: [{ question: "", maxMarks: 10 }],
+  mcqEnabled: false, questions: [blankMCQ()], passingScore: 60,
+  writtenEnabled: false, writtenQuestions: [blankMarked()],
   interviewEnabled: false, interviewDate: "", interviewTime: "", interviewLink: "", interviewer: "",
-  interviewQuestions: [{ question: "", maxMarks: 10 }],
+  interviewQuestions: [blankMarked()],
+  // Second attempt (Set B) — same structure, different questions.
+  setBEnabled: false, questionsB: [blankMCQ()], writtenQuestionsB: [blankMarked()], interviewQuestionsB: [blankMarked()],
 };
 
 export default function AssessmentsPage() {
@@ -23,6 +28,7 @@ export default function AssessmentsPage() {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(EMPTY);
+  const [activeSet, setActiveSet] = useState("A"); // which set's questions are being edited
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -46,27 +52,74 @@ export default function AssessmentsPage() {
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-  // MCQ helpers
-  const setQs = (u) => setForm((f) => ({ ...f, questions: u(f.questions) }));
-  const addQuestion = () => setQs((qs) => [...qs, { question: "", options: ["", "", "", ""], correctIndex: 0 }]);
+  // Which set's question arrays the builders target (A = first, B = retry).
+  const B = activeSet === "B";
+  const qKey = B ? "questionsB" : "questions";
+  const wKey = B ? "writtenQuestionsB" : "writtenQuestions";
+  const iKey = B ? "interviewQuestionsB" : "interviewQuestions";
+
+  // MCQ helpers (operate on the active set)
+  const setQs = (u) => setForm((f) => ({ ...f, [qKey]: u(f[qKey] || []) }));
+  const addQuestion = () => setQs((qs) => [...qs, blankMCQ()]);
   const rmQuestion = (i) => setQs((qs) => qs.filter((_, j) => j !== i));
   const updQuestion = (i, v) => setQs((qs) => qs.map((q, j) => (j === i ? { ...q, question: v } : q)));
   const updOption = (i, oi, v) => setQs((qs) => qs.map((q, j) => (j === i ? { ...q, options: q.options.map((o, k) => (k === oi ? v : o)) } : q)));
-  const setCorrect = (i, oi) => setQs((qs) => qs.map((q, j) => (j === i ? { ...q, correctIndex: oi } : q)));
+  const addOption = (i) => setQs((qs) => qs.map((q, j) => (j === i ? { ...q, options: [...(q.options || []), ""] } : q)));
+  const rmOption = (i, oi) => setQs((qs) => qs.map((q, j) => {
+    if (j !== i) return q;
+    const options = (q.options || []).filter((_, k) => k !== oi);
+    const correctIndexes = (q.correctIndexes || []).filter((c) => c !== oi).map((c) => (c > oi ? c - 1 : c));
+    return { ...q, options, correctIndexes: correctIndexes.length ? correctIndexes : [0] };
+  }));
+  const toggleMultiple = (i) => setQs((qs) => qs.map((q, j) => {
+    if (j !== i) return q;
+    const multiple = !q.multiple;
+    const correctIndexes = multiple ? (q.correctIndexes || []) : (q.correctIndexes || []).slice(0, 1);
+    return { ...q, multiple, correctIndexes: correctIndexes.length ? correctIndexes : [0] };
+  }));
+  const setMedia = (i, v) => setQs((qs) => qs.map((q, j) => (j === i ? { ...q, media: v } : q)));
+  const onMediaFile = (i, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { setError("Attachment must be under 5 MB."); e.target.value = ""; return; }
+    const reader = new FileReader();
+    reader.onload = () => setMedia(i, reader.result);
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+  const toggleCorrect = (i, oi) => setQs((qs) => qs.map((q, j) => {
+    if (j !== i) return q;
+    const cur = q.correctIndexes || [];
+    if (q.multiple) {
+      const next = cur.includes(oi) ? cur.filter((c) => c !== oi) : [...cur, oi].sort((a, b) => a - b);
+      return { ...q, correctIndexes: next.length ? next : [] };
+    }
+    return { ...q, correctIndexes: [oi] };
+  }));
 
   // Marked-question helpers (written / interview)
-  const addMarked = (key) => setForm((f) => ({ ...f, [key]: [...f[key], { question: "", maxMarks: 10 }] }));
+  const addMarked = (key) => setForm((f) => ({ ...f, [key]: [...(f[key] || []), blankMarked()] }));
   const rmMarked = (key, i) => setForm((f) => ({ ...f, [key]: f[key].filter((_, j) => j !== i) }));
   const setMarked = (key, i, field, v) => setForm((f) => ({ ...f, [key]: f[key].map((q, j) => (j === i ? { ...q, [field]: v } : q)) }));
+  const onMarkedMediaFile = (key, i, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { setError("Attachment must be under 5 MB."); e.target.value = ""; return; }
+    const reader = new FileReader();
+    reader.onload = () => setMarked(key, i, "media", reader.result);
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
 
-  const reset = () => { setForm(EMPTY); setEditingId(null); setError(""); };
+  const reset = () => { setForm(EMPTY); setActiveSet("A"); setEditingId(null); setError(""); };
 
   const submit = async (e) => {
     e.preventDefault();
     setError("");
     if (!form.title.trim()) { setError("Title is required"); return; }
     if (!form.mcqEnabled && !form.writtenEnabled && !form.interviewEnabled) { setError("Enable at least one section"); return; }
-    if (form.mcqEnabled && !form.questions.some((q) => q.question.trim())) { setError("Add at least one MCQ question"); return; }
+    if (form.mcqEnabled && !form.questions.some((q) => q.question.trim())) { setError("Add at least one MCQ question in Set A"); return; }
+    if (form.setBEnabled && form.mcqEnabled && !(form.questionsB || []).some((q) => q.question.trim())) { setError("Set B is enabled — add at least one MCQ question in Set B (switch to the Set B tab)"); return; }
     setSaving(true);
     try {
       const res = editingId
@@ -81,18 +134,35 @@ export default function AssessmentsPage() {
     }
   };
 
-  const editItem = (a) => {
-    setEditingId(a.id);
+  const loadMCQ = (arr) => (arr && arr.length) ? arr.map((q) => {
+    const options = (q.options && q.options.length) ? q.options : ["", "", "", ""];
+    let correctIndexes = (Array.isArray(q.correctIndexes) && q.correctIndexes.length) ? q.correctIndexes : (q.correctIndex != null ? [q.correctIndex] : [0]);
+    return { question: q.question || "", options, correctIndex: correctIndexes[0] ?? 0, correctIndexes, multiple: !!q.multiple || correctIndexes.length > 1, media: q.media || "" };
+  }) : [blankMCQ()];
+  const loadMarked = (arr) => (arr && arr.length) ? arr.map((q) => ({ question: q.question || "", maxMarks: q.maxMarks ?? 10, modelAnswer: q.modelAnswer || "", media: q.media || "" })) : [blankMarked()];
+
+  const editItem = async (row) => {
+    setEditingId(row.id);
+    setActiveSet("A");
+    setError("");
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+    // The list omits question media for speed — fetch the full assessment to edit.
+    let a = row;
+    try { const r = await apiFetch(`/api/assessments/${row.id}`, { cache: "no-store" }); const d = await r.json(); if (r.ok && d.assessment) a = d.assessment; } catch { /* fall back to row */ }
     setForm({
       title: a.title, course: a.course || "", description: a.description || "", status: a.status || "Active",
       mcqEnabled: !!a.mcqEnabled,
-      questions: (a.questions && a.questions.length) ? a.questions.map((q) => ({ question: q.question || "", options: (q.options && q.options.length) ? q.options : ["", "", "", ""], correctIndex: q.correctIndex || 0 })) : [{ question: "", options: ["", "", "", ""], correctIndex: 0 }],
+      questions: loadMCQ(a.questions),
       passingScore: a.passingScore || 60,
       writtenEnabled: !!a.writtenEnabled,
-      writtenQuestions: (a.writtenQuestions && a.writtenQuestions.length) ? a.writtenQuestions.map((q) => ({ question: q.question || "", maxMarks: q.maxMarks ?? 10 })) : [{ question: "", maxMarks: 10 }],
+      writtenQuestions: loadMarked(a.writtenQuestions),
       interviewEnabled: !!a.interviewEnabled,
       interviewDate: a.interviewDate || "", interviewTime: a.interviewTime || "", interviewLink: a.interviewLink || "", interviewer: a.interviewer || "",
-      interviewQuestions: (a.interviewQuestions && a.interviewQuestions.length) ? a.interviewQuestions.map((q) => ({ question: q.question || "", maxMarks: q.maxMarks ?? 10 })) : [{ question: "", maxMarks: 10 }],
+      interviewQuestions: loadMarked(a.interviewQuestions),
+      setBEnabled: !!a.setBEnabled,
+      questionsB: loadMCQ(a.questionsB),
+      writtenQuestionsB: loadMarked(a.writtenQuestionsB),
+      interviewQuestionsB: loadMarked(a.interviewQuestionsB),
     });
     setError("");
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
@@ -167,6 +237,35 @@ export default function AssessmentsPage() {
           </div>
           <div><label className={label}>Description</label><textarea rows={2} className={`${field} resize-y`} value={form.description} onChange={(e) => set("description", e.target.value)} /></div>
 
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className={label}>Passing Criteria (%)</label>
+              <input type="number" min={0} max={100} className={field} value={form.passingScore} onChange={(e) => set("passingScore", e.target.value)} />
+              <p className="text-xs text-gray-400 mt-1">Combined MCQ + Written + Interview score needed to pass.</p>
+            </div>
+          </div>
+
+          {/* ── Second attempt (Set B) ── */}
+          <div className="rounded-2xl border border-gray-200 px-4 py-3 flex items-center justify-between" style={{ background: "rgba(99,102,241,0.06)" }}>
+            <div>
+              <span className="font-bold text-gray-900 flex items-center gap-2"><RefreshCw size={16} className="text-[#db254f]" /> Second Attempt (Set B)</span>
+              <p className="text-xs text-gray-500 mt-0.5">Give a retry with a different set of questions if the student fails the MCQ on the first attempt.</p>
+            </div>
+            <Toggle on={form.setBEnabled} onClick={() => { const next = !form.setBEnabled; set("setBEnabled", next); if (!next) setActiveSet("A"); }} />
+          </div>
+
+          {form.setBEnabled && (
+            <div className="flex flex-wrap items-center gap-2">
+              {["A", "B"].map((sName) => (
+                <button key={sName} type="button" onClick={() => setActiveSet(sName)}
+                  className={`px-5 py-2 rounded-full text-sm font-semibold btn-pill transition ${activeSet === sName ? "bg-[#db254f] text-white shadow-sm shadow-rose-200" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                  Set {sName}{sName === "B" ? " · Retry" : " · First attempt"}
+                </button>
+              ))}
+              <span className="text-xs text-gray-400 ml-1">Editing questions for <b className="text-gray-600">Set {activeSet}</b>. Passing % and interview schedule are shared by both sets.</span>
+            </div>
+          )}
+
           {/* ── MCQ section ── */}
           <div className="rounded-2xl border border-gray-200 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
@@ -175,27 +274,62 @@ export default function AssessmentsPage() {
             </div>
             {form.mcqEnabled && (
               <div className="p-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 text-sm text-gray-600">Passing %<input type="number" min={0} max={100} className="w-20 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm outline-none" value={form.passingScore} onChange={(e) => set("passingScore", e.target.value)} /></label>
+                <div className="flex items-center justify-end">
                   <button type="button" onClick={addQuestion} className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-full btn-pill bg-[#db254f] hover:bg-[#b91d40] text-white px-4 py-2 transition"><Plus size={15} /> Add Question</button>
                 </div>
-                {form.questions.map((q, qi) => (
+                {(form[qKey] || []).map((q, qi) => {
+                  const correct = q.correctIndexes || [];
+                  return (
                   <div key={qi} className="rounded-2xl border border-gray-200 p-3">
                     <div className="flex items-start gap-2 mb-3">
                       <span className="w-6 h-6 rounded-full bg-rose-100 text-[#db254f] text-xs font-bold flex items-center justify-center shrink-0 mt-1.5">{qi + 1}</span>
                       <input className={field} placeholder="Question" value={q.question} onChange={(e) => updQuestion(qi, e.target.value)} />
                       <button type="button" onClick={() => rmQuestion(qi)} className="shrink-0 w-9 h-9 rounded-full btn-pill bg-gray-100 hover:bg-rose-50 text-gray-400 hover:text-rose-500 flex items-center justify-center"><Trash2 size={15} /></button>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-8">
-                      {(q.options && q.options.length ? q.options : ["", "", "", ""]).map((opt, oi) => (
-                        <div key={oi} className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 text-sm transition ${q.correctIndex === oi ? "border-emerald-400 bg-emerald-50" : "border-gray-200 bg-gray-50"}`}>
-                          <button type="button" onClick={() => setCorrect(qi, oi)} title="Correct answer" className={`shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition ${q.correctIndex === oi ? "border-emerald-500 bg-emerald-500 text-white" : "border-gray-300 bg-white text-transparent hover:border-emerald-400"}`}><Check size={12} strokeWidth={3} /></button>
-                          <input type="text" className="flex-1 min-w-0 bg-transparent outline-none" placeholder={`Option ${oi + 1}`} value={opt} onChange={(e) => updOption(qi, oi, e.target.value)} />
+                    <div className="pl-8 space-y-2.5">
+                      {/* Optional image / PDF attachment */}
+                      {q.media ? (
+                        <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-2">
+                          {q.media.startsWith("data:image") ? (
+                            <img src={q.media} alt="attachment" className="w-16 h-16 object-cover rounded-lg border border-gray-200 shrink-0" />
+                          ) : (
+                            <span className="w-16 h-16 rounded-lg bg-rose-50 text-[#db254f] flex items-center justify-center shrink-0"><FileText size={22} /></span>
+                          )}
+                          <span className="text-xs text-gray-500 flex-1">{q.media.startsWith("data:image") ? "Image attached" : "PDF attached"} — shown to students with this question.</span>
+                          <button type="button" onClick={() => setMedia(qi, "")} className="text-xs font-semibold text-rose-500 hover:underline shrink-0">Remove</button>
                         </div>
-                      ))}
+                      ) : (
+                        <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#db254f] cursor-pointer hover:underline">
+                          <ImageIcon size={14} /> Add image / PDF to this question
+                          <input type="file" accept="image/*,application/pdf" hidden onChange={(e) => onMediaFile(qi, e)} />
+                        </label>
+                      )}
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <span className="text-xs text-gray-500">{q.multiple ? "Tick ALL correct options (student must select the exact set)" : "Tick the single correct option"}</span>
+                        <label className="flex items-center gap-1.5 text-xs font-medium text-gray-600 cursor-pointer select-none">
+                          <input type="checkbox" checked={!!q.multiple} onChange={() => toggleMultiple(qi)} className="accent-[#db254f]" /> Multiple correct answers
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {(q.options || []).map((opt, oi) => {
+                          const on = correct.includes(oi);
+                          return (
+                            <div key={oi} className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 text-sm transition ${on ? "border-emerald-400 bg-emerald-50" : "border-gray-200 bg-gray-50"}`}>
+                              <button type="button" onClick={() => toggleCorrect(qi, oi)} title="Mark as correct"
+                                className={`shrink-0 w-5 h-5 ${q.multiple ? "rounded-md" : "rounded-full"} border-2 flex items-center justify-center transition ${on ? "border-emerald-500 bg-emerald-500 text-white" : "border-gray-300 bg-white text-transparent hover:border-emerald-400"}`}><Check size={12} strokeWidth={3} /></button>
+                              <input type="text" className="flex-1 min-w-0 bg-transparent outline-none" placeholder={`Option ${oi + 1}`} value={opt} onChange={(e) => updOption(qi, oi, e.target.value)} />
+                              {(q.options || []).length > 2 && (
+                                <button type="button" onClick={() => rmOption(qi, oi)} title="Remove option" className="shrink-0 text-gray-300 hover:text-rose-500 transition"><X size={14} /></button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <button type="button" onClick={() => addOption(qi)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#db254f] hover:underline"><Plus size={13} /> Add option</button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -209,16 +343,39 @@ export default function AssessmentsPage() {
             {form.writtenEnabled && (
               <div className="p-4 space-y-3">
                 <div className="flex justify-end">
-                  <button type="button" onClick={() => addMarked("writtenQuestions")} className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-full btn-pill bg-[#db254f] hover:bg-[#b91d40] text-white px-4 py-2 transition"><Plus size={15} /> Add Question</button>
+                  <button type="button" onClick={() => addMarked(wKey)} className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-full btn-pill bg-[#db254f] hover:bg-[#b91d40] text-white px-4 py-2 transition"><Plus size={15} /> Add Question</button>
                 </div>
-                {form.writtenQuestions.map((q, i) => (
-                  <div key={i} className="flex flex-col sm:flex-row gap-3 items-start">
-                    <span className="w-6 h-6 rounded-full bg-rose-100 text-[#db254f] text-xs font-bold flex items-center justify-center shrink-0 mt-2.5">{i + 1}</span>
-                    <textarea rows={2} className={`${field} resize-y`} placeholder="Written question…" value={q.question} onChange={(e) => setMarked("writtenQuestions", i, "question", e.target.value)} />
-                    <div className="flex items-center gap-2 shrink-0">
-                      <label className="text-xs text-gray-500">Max</label>
-                      <input type="number" min={0} className="w-20 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-2.5 text-sm outline-none" value={q.maxMarks} onChange={(e) => setMarked("writtenQuestions", i, "maxMarks", e.target.value)} />
-                      <button type="button" onClick={() => rmMarked("writtenQuestions", i)} className="w-9 h-9 rounded-full btn-pill bg-gray-100 hover:bg-rose-50 text-gray-400 hover:text-rose-500 flex items-center justify-center"><Trash2 size={15} /></button>
+                {(form[wKey] || []).map((q, i) => (
+                  <div key={i} className="rounded-2xl border border-gray-200 p-3 space-y-2">
+                    <div className="flex flex-col sm:flex-row gap-3 items-start">
+                      <span className="w-6 h-6 rounded-full bg-rose-100 text-[#db254f] text-xs font-bold flex items-center justify-center shrink-0 mt-2.5">{i + 1}</span>
+                      <textarea rows={2} className={`${field} resize-y`} placeholder="Written question…" value={q.question} onChange={(e) => setMarked(wKey, i, "question", e.target.value)} />
+                      <div className="flex items-center gap-2 shrink-0">
+                        <label className="text-xs text-gray-500">Max</label>
+                        <input type="number" min={0} className="w-20 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-2.5 text-sm outline-none" value={q.maxMarks} onChange={(e) => setMarked(wKey, i, "maxMarks", e.target.value)} />
+                        <button type="button" onClick={() => rmMarked(wKey, i)} className="w-9 h-9 rounded-full btn-pill bg-gray-100 hover:bg-rose-50 text-gray-400 hover:text-rose-500 flex items-center justify-center"><Trash2 size={15} /></button>
+                      </div>
+                    </div>
+                    <div className="sm:pl-9">
+                      <textarea rows={2} className={`${field} resize-y`} placeholder="Model answer / grading notes (optional — helps the AI grade this answer accurately)" value={q.modelAnswer || ""} onChange={(e) => setMarked(wKey, i, "modelAnswer", e.target.value)} />
+                    </div>
+                    <div className="sm:pl-9">
+                      {q.media ? (
+                        <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-2">
+                          {q.media.startsWith("data:image") ? (
+                            <img src={q.media} alt="attachment" className="w-16 h-16 object-cover rounded-lg border border-gray-200 shrink-0" />
+                          ) : (
+                            <span className="w-16 h-16 rounded-lg bg-rose-50 text-[#db254f] flex items-center justify-center shrink-0"><FileText size={22} /></span>
+                          )}
+                          <span className="text-xs text-gray-500 flex-1">{q.media.startsWith("data:image") ? "Image attached" : "PDF attached"} — shown to students with this question.</span>
+                          <button type="button" onClick={() => setMarked(wKey, i, "media", "")} className="text-xs font-semibold text-rose-500 hover:underline shrink-0">Remove</button>
+                        </div>
+                      ) : (
+                        <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#db254f] cursor-pointer hover:underline">
+                          <ImageIcon size={14} /> Add image / PDF to this question
+                          <input type="file" accept="image/*,application/pdf" hidden onChange={(e) => onMarkedMediaFile(wKey, i, e)} />
+                        </label>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -242,16 +399,16 @@ export default function AssessmentsPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-gray-700">Interview Questions <span className="text-xs font-normal text-gray-400">(interviewer scores each within max marks)</span></span>
-                  <button type="button" onClick={() => addMarked("interviewQuestions")} className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-full btn-pill bg-[#db254f] hover:bg-[#b91d40] text-white px-4 py-2 transition"><Plus size={15} /> Add Question</button>
+                  <button type="button" onClick={() => addMarked(iKey)} className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-full btn-pill bg-[#db254f] hover:bg-[#b91d40] text-white px-4 py-2 transition"><Plus size={15} /> Add Question</button>
                 </div>
-                {form.interviewQuestions.map((q, i) => (
+                {(form[iKey] || []).map((q, i) => (
                   <div key={i} className="flex flex-col sm:flex-row gap-3 items-start">
                     <span className="w-6 h-6 rounded-full bg-rose-100 text-[#db254f] text-xs font-bold flex items-center justify-center shrink-0 mt-2.5">{i + 1}</span>
-                    <textarea rows={2} className={`${field} resize-y`} placeholder="e.g. Rate the candidate's spoken English / IQ …" value={q.question} onChange={(e) => setMarked("interviewQuestions", i, "question", e.target.value)} />
+                    <textarea rows={2} className={`${field} resize-y`} placeholder="e.g. Rate the candidate's spoken English / IQ …" value={q.question} onChange={(e) => setMarked(iKey, i, "question", e.target.value)} />
                     <div className="flex items-center gap-2 shrink-0">
                       <label className="text-xs text-gray-500">Max</label>
-                      <input type="number" min={0} className="w-20 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-2.5 text-sm outline-none" value={q.maxMarks} onChange={(e) => setMarked("interviewQuestions", i, "maxMarks", e.target.value)} />
-                      <button type="button" onClick={() => rmMarked("interviewQuestions", i)} className="w-9 h-9 rounded-full btn-pill bg-gray-100 hover:bg-rose-50 text-gray-400 hover:text-rose-500 flex items-center justify-center"><Trash2 size={15} /></button>
+                      <input type="number" min={0} className="w-20 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-2.5 text-sm outline-none" value={q.maxMarks} onChange={(e) => setMarked(iKey, i, "maxMarks", e.target.value)} />
+                      <button type="button" onClick={() => rmMarked(iKey, i)} className="w-9 h-9 rounded-full btn-pill bg-gray-100 hover:bg-rose-50 text-gray-400 hover:text-rose-500 flex items-center justify-center"><Trash2 size={15} /></button>
                     </div>
                   </div>
                 ))}

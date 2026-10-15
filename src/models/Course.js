@@ -54,6 +54,8 @@ const CourseSchema = new mongoose.Schema({
   duration: { type: String, default: "" },
   expiryDays: { type: String, default: "" },
   enrolledTillDate: { type: String, default: "" },
+  startDate: { type: String, default: "" }, // yyyy-mm-dd — course start
+  endDate: { type: String, default: "" },   // yyyy-mm-dd — optional; blank = access expires 1 year after enrolment
   thumbnail: { type: String, default: "" }, // data URL
   websiteUrl: { type: String, default: "" },
   subscriptionType: { type: String, default: "B2C" }, // B2B | B2C
