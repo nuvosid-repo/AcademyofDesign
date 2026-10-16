@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveUseMock, mockAssessments } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { serializeAssessment, buildAssessmentDoc } from "@/lib/assessmentFields";
+import { offloadMedia } from "@/lib/cloudinary";
 import Assessment from "@/models/Assessment";
 
 export const runtime = "nodejs";
@@ -29,7 +30,8 @@ export async function POST(request) {
   if (auth.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const b = await request.json().catch(() => ({}));
-  const doc = buildAssessmentDoc(b);
+  // Offload any base64 question media (images/PDFs) to Cloudinary.
+  const doc = await offloadMedia(buildAssessmentDoc(b), { folder: "nuvosid/assessments" });
   if (!doc.title) return NextResponse.json({ error: "Title is required" }, { status: 400 });
   if (!doc.mcqEnabled && !doc.writtenEnabled && !doc.interviewEnabled) {
     return NextResponse.json({ error: "Enable at least one section (MCQ / Written / Interview)" }, { status: 400 });

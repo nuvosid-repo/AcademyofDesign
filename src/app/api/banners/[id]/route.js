@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockBanners } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { uploadDataUrl } from "@/lib/cloudinary";
 import Banner from "@/models/Banner";
 
 export const runtime = "nodejs";
@@ -18,6 +19,7 @@ export async function PUT(request, { params }) {
   if (guard.error) return guard.error;
   const { id } = await params;
   const b = await request.json().catch(() => ({}));
+  if (b.image != null) b.image = await uploadDataUrl(b.image, { folder: "nuvosid/banners" });
 
   const useMock = await resolveUseMock();
   if (useMock) {

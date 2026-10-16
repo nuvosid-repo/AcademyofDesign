@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockStudents } from "@/lib/db";
 import { getAuthUser, bcrypt } from "@/lib/auth";
+import { offloadMedia } from "@/lib/cloudinary";
 import Student from "@/models/Student";
 
 export const runtime = "nodejs";
@@ -41,10 +42,12 @@ export async function PUT(request, { params }) {
   const { id } = await params;
   const b = await request.json().catch(() => ({}));
 
-  const patch = {};
+  let patch = {};
   for (const f of FIELDS) if (b[f] != null) patch[f] = typeof b[f] === "string" ? b[f].trim?.() ?? b[f] : b[f];
   if (patch.email) patch.email = patch.email.toLowerCase();
   if (b.password) patch.password = await bcrypt.hash(b.password, await bcrypt.genSalt(10));
+  // Offload any newly-added base64 avatar / identity proof to Cloudinary.
+  patch = await offloadMedia(patch, { folder: "nuvosid/students" });
 
   const useMock = await resolveUseMock();
   if (useMock) {

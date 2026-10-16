@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveUseMock, mockInstructors } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { serializeInstructor as serialize, buildInstructorDoc } from "@/lib/instructorFields";
+import { offloadMedia } from "@/lib/cloudinary";
 import Instructor from "@/models/Instructor";
 
 export const runtime = "nodejs";
@@ -25,7 +26,7 @@ export async function POST(request) {
   if (auth.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const b = await request.json().catch(() => ({}));
-  const doc = buildInstructorDoc(b);
+  const doc = await offloadMedia(buildInstructorDoc(b), { folder: "nuvosid/instructors" });
   if (!doc.name || !doc.designation) {
     return NextResponse.json({ error: "Name and designation are required" }, { status: 400 });
   }

@@ -209,7 +209,7 @@ export default function AssessmentsPage() {
     <AdminShell title="Assessment" subtitle="Create combined assessments — MCQ, Written exam & Live Interview.">
       <div className="flex justify-end mb-4">
         <Link href="/admin/assessments/score" className="inline-flex items-center gap-2 rounded-full btn-pill bg-gray-900 hover:bg-black text-white text-sm font-semibold px-4 py-2 transition">
-          <Award size={16} /> Score Assessments
+          <Award size={16} /> Assessment Results
         </Link>
       </div>
 

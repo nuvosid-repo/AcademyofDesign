@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockAssessments, mockEnrollments, mockAssessmentResults } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
-import { serializeAssessment, pickSet } from "@/lib/assessmentFields";
+import { serializeAssessment, pickSet, combinedResult } from "@/lib/assessmentFields";
 import Assessment from "@/models/Assessment";
 import Enrollment from "@/models/Enrollment";
 import AssessmentResult from "@/models/AssessmentResult";
@@ -44,7 +44,10 @@ export async function GET(request, { params }) {
     // Grade against the question set this student actually took (A or B).
     const examSet = r.examSet || ((r.attempt || 1) >= 2 ? "B" : "A");
     const setQ = pickSet(s, examSet);
+    const combined = combinedResult(s, r);
     students.push({
+      combinedReady: combined.ready, combinedPercentage: combined.percentage, combinedPassed: combined.passed,
+      combinedScore: combined.totalScore, combinedTotal: combined.totalMax,
       studentId: e.studentId,
       name: e.studentName || r.studentName || "",
       email: e.studentEmail || "",
@@ -56,12 +59,13 @@ export async function GET(request, { params }) {
       writtenBreakdown: r.writtenBreakdown || [],
       interviewGraded: !!r.interviewGraded, interviewScore: r.interviewScore || 0, interviewTotal: r.interviewTotal || 0,
       interviewBreakdown: r.interviewBreakdown || [],
+      interviewVideoUrl: r.interviewVideoUrl || "",
     });
   }
 
   return NextResponse.json({
     assessment: {
-      id: s.id, title: s.title, course: s.course,
+      id: s.id, title: s.title, course: s.course, passingScore: s.passingScore,
       writtenEnabled: s.writtenEnabled, writtenQuestions: s.writtenQuestions,
       interviewEnabled: s.interviewEnabled, interviewQuestions: s.interviewQuestions, interviewer: s.interviewer,
       mcqEnabled: s.mcqEnabled,

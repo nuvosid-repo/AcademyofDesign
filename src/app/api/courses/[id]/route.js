@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockCourses } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { offloadMedia } from "@/lib/cloudinary";
 import Course from "@/models/Course";
 
 export const runtime = "nodejs";
@@ -38,8 +39,11 @@ export async function PUT(request, { params }) {
 
   const { id } = await params;
   const b = await request.json().catch(() => ({}));
-  const patch = {};
+  let patch = {};
   for (const f of FIELDS) if (b[f] != null) patch[f] = b[f];
+  // Offload any newly-added base64 media to Cloudinary (already-stored URLs are
+  // left untouched, so unchanged media is never re-uploaded).
+  patch = await offloadMedia(patch, { folder: "nuvosid/courses" });
 
   const useMock = await resolveUseMock();
   if (useMock) {

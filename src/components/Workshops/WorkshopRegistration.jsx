@@ -50,6 +50,7 @@ export default function WorkshopRegistration({ workshop }) {
           ...formData,
           workshopId: workshop.id,
           workshopTitle: workshop.title,
+          price: workshop.price,
         }),
       });
 
@@ -71,9 +72,19 @@ export default function WorkshopRegistration({ workshop }) {
     }
   };
 
-  const handleMockPayment = () => {
+  const handleMockPayment = async () => {
     setPaymentStep("processing");
-    setTimeout(() => setPaymentStep("success"), 2000);
+    // Record the payment on the server so it appears as "Paid" in the admin panel.
+    try {
+      const regId = registeredData?._id;
+      if (regId) {
+        await apiFetch("/api/workshops/register", {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: regId, transactionId, price: workshop.price, status: "Paid" }),
+        });
+      }
+    } catch { /* payment is mock — don't block the user if recording hiccups */ }
+    setPaymentStep("success");
   };
 
   const handleCloseSuccess = () => {

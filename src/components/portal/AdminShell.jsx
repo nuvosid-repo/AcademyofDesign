@@ -31,7 +31,13 @@ const NAV = [
     children: [{ href: "/admin/manage-courses", label: "All Courses" }],
   },
   { href: "/admin/live-classes", label: "Live Class", icon: ClipboardList },
-  { href: "/admin/workshops", label: "Workshop", icon: Presentation },
+  {
+    label: "Workshop", icon: Presentation,
+    children: [
+      { href: "/admin/workshops", label: "All Workshops" },
+      { href: "/admin/workshops/registrations", label: "Registrations & Billing" },
+    ],
+  },
   { href: "/admin/assessments", label: "Assessment", icon: ClipboardCheck },
   {
     label: "Student", icon: Users,

@@ -18,7 +18,7 @@ export async function POST(request, { params }) {
   const auth = await getAuthUser(request);
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  const { answers, questions: bodyQs } = await request.json().catch(() => ({}));
+  const { answers, questions: bodyQs, videoUrl } = await request.json().catch(() => ({}));
   if (!Array.isArray(answers)) return NextResponse.json({ error: "answers required" }, { status: 400 });
 
   const useMock = await resolveUseMock();
@@ -68,6 +68,8 @@ export async function POST(request, { params }) {
     studentId: auth.id, studentName: auth.name || "", assessmentId: id, assessmentTitle: s.title || "", course: s.course || "", type: "Assessment",
     interviewBreakdown: breakdown, interviewScore, interviewTotal, interviewGraded: graded, updatedAt: new Date(),
   };
+  // Store the recorded session URL (uploaded straight to Cloudinary by the client).
+  if (typeof videoUrl === "string" && videoUrl) setFields.interviewVideoUrl = videoUrl;
 
   if (useMock) {
     const store = mockAssessmentResults();

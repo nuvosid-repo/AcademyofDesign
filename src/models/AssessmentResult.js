@@ -56,6 +56,7 @@ const AssessmentResultSchema = new mongoose.Schema({
   interviewScore: { type: Number, default: 0 },
   interviewTotal: { type: Number, default: 0 },
   interviewGraded: { type: Boolean, default: false },
+  interviewVideoUrl: { type: String, default: "" }, // Cloudinary URL of the recorded session
 
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },

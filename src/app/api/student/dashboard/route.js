@@ -53,9 +53,15 @@ export async function GET(request) {
   const inEnrolled = (courseTitle) => courseTitle && courseTitles.has(courseTitle);
   const isActive = (x) => (x.status || "Active") !== "Inactive";
 
-  // Upcoming live classes for enrolled courses
+  // Today's date in IST (YYYY-MM-DD) so date comparisons are correct for India
+  // regardless of the server's timezone. A live class whose date is in the past
+  // is hidden from the dashboard; undated classes are kept.
+  const todayIST = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  const notPast = (l) => !l.date || l.date >= todayIST;
+
+  // Upcoming live classes for enrolled courses (past-dated ones are dropped)
   const liveClasses = allLive
-    .filter((l) => isActive(l) && inEnrolled(l.course))
+    .filter((l) => isActive(l) && inEnrolled(l.course) && notPast(l))
     .map((l) => ({
       id: (l._id && l._id.toString()) || l.id,
       title: l.title,

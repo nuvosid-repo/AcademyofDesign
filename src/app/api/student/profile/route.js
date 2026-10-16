@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockStudents } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { offloadMedia } from "@/lib/cloudinary";
 import Student from "@/models/Student";
 
 export const runtime = "nodejs";
@@ -45,11 +46,13 @@ export async function PUT(request) {
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json().catch(() => ({}));
-  const update = {};
+  let update = {};
   for (const k of EDITABLE) {
     if (body[k] !== undefined) update[k] = typeof body[k] === "string" ? body[k].trim() : body[k];
   }
   if (update.name !== undefined && !update.name) return NextResponse.json({ error: "Name cannot be empty" }, { status: 400 });
+  // Offload a newly-uploaded base64 avatar to Cloudinary.
+  update = await offloadMedia(update, { folder: "nuvosid/students" });
 
   const useMock = await resolveUseMock();
   if (useMock) {

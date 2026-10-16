@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockBanners } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { uploadDataUrl } from "@/lib/cloudinary";
 import Banner from "@/models/Banner";
 
 export const runtime = "nodejs";
@@ -32,7 +33,8 @@ export async function POST(request) {
 
   const b = await request.json().catch(() => ({}));
   if (!b.image) return NextResponse.json({ error: "Please upload a banner image" }, { status: 400 });
-  const doc = { image: b.image, status: b.status === "Inactive" ? "Inactive" : "Active" };
+  const image = await uploadDataUrl(b.image, { folder: "nuvosid/banners" });
+  const doc = { image, status: b.status === "Inactive" ? "Inactive" : "Active" };
 
   const useMock = await resolveUseMock();
   if (useMock) {

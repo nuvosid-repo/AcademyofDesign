@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockStudents, mockEnrollments } from "@/lib/db";
 import { getAuthUser, bcrypt } from "@/lib/auth";
+import { offloadMedia } from "@/lib/cloudinary";
 import Student from "@/models/Student";
 import Enrollment from "@/models/Enrollment";
 
@@ -65,8 +66,10 @@ export async function POST(request) {
   if (!name || !email || !b.password) {
     return NextResponse.json({ error: "Name, email and password are required" }, { status: 400 });
   }
-  const doc = {};
+  let doc = {};
   for (const f of FIELDS) if (b[f] != null) doc[f] = b[f];
+  // Offload base64 avatar / identity proof to Cloudinary.
+  doc = await offloadMedia(doc, { folder: "nuvosid/students" });
   doc.name = name; doc.email = email;
   doc.password = await bcrypt.hash(b.password, await bcrypt.genSalt(10));
   if (!doc.status) doc.status = "Active";

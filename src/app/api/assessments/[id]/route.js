@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveUseMock, mockAssessments } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { buildAssessmentDoc, serializeAssessment } from "@/lib/assessmentFields";
+import { offloadMedia } from "@/lib/cloudinary";
 import Assessment from "@/models/Assessment";
 
 export const runtime = "nodejs";
@@ -34,7 +35,7 @@ export async function PUT(request, { params }) {
   if (guard.error) return guard.error;
   const { id } = await params;
   const b = await request.json().catch(() => ({}));
-  const patch = buildAssessmentDoc(b);
+  const patch = await offloadMedia(buildAssessmentDoc(b), { folder: "nuvosid/assessments" });
   if (!patch.title) return NextResponse.json({ error: "Title is required" }, { status: 400 });
 
   const useMock = await resolveUseMock();

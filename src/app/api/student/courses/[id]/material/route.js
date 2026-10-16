@@ -34,20 +34,31 @@ export async function GET(request, { params }) {
   const mat = cls?.materials?.[mi];
   if (!mat || !mat.data) return NextResponse.json({ error: "Material not found" }, { status: 404 });
 
+  // The file may be stored inline (legacy base64 data URL) or as a Cloudinary
+  // URL. Either way we stream the bytes back with the content-type we recorded,
+  // so the browser renders PDFs inline and keeps the viewer CORS-free.
+  let buf, srcType;
   const m = /^data:([^;]+);base64,(.*)$/s.exec(mat.data);
-  if (!m) return NextResponse.redirect(mat.data);
-  const buf = Buffer.from(m[2], "base64");
+  if (m) {
+    buf = Buffer.from(m[2], "base64");
+    srcType = m[1];
+  } else {
+    const r = await fetch(mat.data).catch(() => null);
+    if (!r || !r.ok) return NextResponse.json({ error: "Material unavailable" }, { status: 502 });
+    buf = Buffer.from(await r.arrayBuffer());
+    srcType = r.headers.get("content-type") || "";
+  }
   const fname = (mat.fileName || mat.name || "file").replace(/"/g, "");
 
   // Only Excel/CSV spreadsheets are downloadable; everything else is view-only
   // (served inline so it opens in the browser rather than downloading).
-  const typeStr = (mat.type || m[1] || "").toLowerCase();
+  const typeStr = (mat.type || srcType || "").toLowerCase();
   const isExcel = /\.(xlsx?|csv)$/i.test(fname) || typeStr.includes("spreadsheet") || typeStr.includes("excel") || typeStr === "text/csv";
   const disposition = isExcel ? `attachment; filename="${fname}"` : `inline; filename="${fname}"`;
 
   return new Response(buf, {
     headers: {
-      "Content-Type": mat.type || m[1] || "application/octet-stream",
+      "Content-Type": mat.type || srcType || "application/octet-stream",
       "Content-Disposition": disposition,
       "Cache-Control": "private, max-age=3600",
     },

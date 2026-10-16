@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockCourses, mockEnrollments } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { offloadMedia } from "@/lib/cloudinary";
 import Course from "@/models/Course";
 import Enrollment from "@/models/Enrollment";
 
@@ -95,7 +96,9 @@ export async function POST(request) {
 
   const b = await request.json().catch(() => ({}));
   if (!b.title || !b.title.trim()) return NextResponse.json({ error: "Title is required" }, { status: 400 });
-  const doc = buildDoc(b);
+  // Offload any base64 media (banner, thumbnail, class materials) to Cloudinary;
+  // only the URLs are stored in Mongo.
+  const doc = await offloadMedia(buildDoc(b), { folder: "nuvosid/courses" });
   doc.title = b.title.trim();
   if (!doc.subscriptionType) doc.subscriptionType = "B2C";
   if (!doc.status) doc.status = "Active";
