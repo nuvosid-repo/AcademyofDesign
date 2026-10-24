@@ -43,6 +43,10 @@ const AssessmentResultSchema = new mongoose.Schema({
   mcqPercentage: { type: Number, default: 0 },
   mcqDone: { type: Boolean, default: false },
 
+  // ── Exam proctoring (camera / head + eye tracking during the MCQ+written exam) ──
+  examVideoUrl: { type: String, default: "" }, // Cloudinary URL of the recorded exam session
+  proctorFlags: { type: [{ type: { type: String, default: "" }, at: { type: Number, default: 0 } }], default: [] }, // violations: { type, at(seconds) }
+
   // ── Written / return exam ──
   writtenAnswers: { type: [AnswerSchema], default: [] }, // student submission
   writtenSubmitted: { type: Boolean, default: false },

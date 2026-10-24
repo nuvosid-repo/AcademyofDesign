@@ -242,7 +242,19 @@ export default function AIInterviewPage() {
     })();
   };
 
-  // Attach the camera stream once the live-room <video> is on screen.
+  // Attach the camera stream to the <video> as soon as it mounts. A callback
+  // ref is more reliable than a [phase] effect in the production build — it runs
+  // the instant the element exists, so the preview never stays black.
+  const attachVideo = (el) => {
+    videoRef.current = el;
+    if (el && streamRef.current && el.srcObject !== streamRef.current) {
+      el.srcObject = streamRef.current;
+      el.muted = true;
+      el.playsInline = true;
+      el.play().catch(() => {});
+    }
+  };
+  // Backup: re-attach on phase change (e.g. if the stream arrives after mount).
   useEffect(() => {
     if (phase === "live" && videoRef.current && streamRef.current && videoRef.current.srcObject !== streamRef.current) {
       videoRef.current.srcObject = streamRef.current;
@@ -410,7 +422,7 @@ export default function AIInterviewPage() {
       {/* Stage */}
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="relative w-full max-w-3xl aspect-video rounded-3xl overflow-hidden border pf-border bg-black shadow-2xl">
-          <video ref={videoRef} className="w-full h-full object-cover" style={{ transform: "scaleX(-1)" }} playsInline />
+          <video ref={attachVideo} className="w-full h-full object-cover" style={{ transform: "scaleX(-1)" }} playsInline autoPlay muted />
 
           {/* REC */}
           <div className="absolute top-4 left-4 inline-flex items-center gap-1.5 text-xs font-semibold text-white px-2.5 py-1 rounded-full" style={{ background: "rgba(220,38,38,0.85)" }}><Radio size={12} /> REC</div>

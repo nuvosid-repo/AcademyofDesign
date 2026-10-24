@@ -1,13 +1,16 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   HelpCircle, FileText, CheckCircle2, ArrowRight, ArrowLeft, Clock,
-  ShieldAlert, Loader2, ClipboardCheck, Ban, RefreshCw,
+  ShieldAlert, Loader2, ClipboardCheck, Ban, RefreshCw, Camera, Eye,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { uploadBlob } from "@/lib/uploadClient";
+import Proctor from "@/components/exam/Proctor";
 
 const EXAM_MINUTES = 30; // TODO: make configurable per assessment later.
+const MAX_TAB_WARNINGS = 3; // after this many tab switches the exam auto-submits
 
 const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
@@ -32,6 +35,18 @@ export default function ExamPage() {
   const [timeLeft, setTimeLeft] = useState(EXAM_MINUTES * 60);
   const [warnings, setWarnings] = useState(0);
   const [showWarn, setShowWarn] = useState(false);
+  const warnRef = useRef(0);       // authoritative warning count (no stale closures)
+  const awayRef = useRef(false);   // true while the tab/window is currently not focused
+  const endedRef = useRef(false);  // guards against double auto-submit
+  const endFnRef = useRef(null);   // always points at the latest handleTimeout
+
+  // ── Camera proctoring ──
+  const streamRef = useRef(null);        // camera MediaStream
+  const proctorRef = useRef(null);       // { stop() } exposed by <Proctor>
+  const proctorFlagsRef = useRef([]);    // violation log { type, at }
+  const examStartRef = useRef(0);        // ms timestamp the exam started
+  const [camState, setCamState] = useState("idle"); // idle | requesting | denied
+  const [toast, setToast] = useState(""); // transient on-screen proctor warning
 
   const inExam = phase === "mcq" || phase === "written";
 
@@ -63,14 +78,33 @@ export default function ExamPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inExam]);
 
-  /* ── Anti-cheat: warn on tab switch / window blur ── */
+  /* ── Anti-cheat: one warning per tab switch; auto-submit after MAX ──
+     blur + visibilitychange both fire on a single tab switch, so we count only
+     the first "leave" and reset when the student returns — no double counting. */
   useEffect(() => {
     if (!inExam) return;
-    const warn = () => { setWarnings((w) => w + 1); setShowWarn(true); };
-    const onVis = () => { if (document.hidden) warn(); };
-    window.addEventListener("blur", warn);
+    const leave = () => {
+      if (awayRef.current || endedRef.current) return; // already counted / exam ending
+      awayRef.current = true;
+      const n = warnRef.current + 1;
+      warnRef.current = n;
+      setWarnings(n);
+      setShowWarn(true);
+      if (n >= MAX_TAB_WARNINGS) {
+        endedRef.current = true;
+        endFnRef.current?.(); // auto-submit the exam
+      }
+    };
+    const back = () => { awayRef.current = false; };
+    const onVis = () => (document.hidden ? leave() : back());
+    window.addEventListener("blur", leave);
+    window.addEventListener("focus", back);
     document.addEventListener("visibilitychange", onVis);
-    return () => { window.removeEventListener("blur", warn); document.removeEventListener("visibilitychange", onVis); };
+    return () => {
+      window.removeEventListener("blur", leave);
+      window.removeEventListener("focus", back);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [inExam]);
 
   /* ── Warn before closing/reloading during the exam ── */
@@ -80,6 +114,9 @@ export default function ExamPage() {
     window.addEventListener("beforeunload", before);
     return () => window.removeEventListener("beforeunload", before);
   }, [inExam]);
+
+  /* ── Release the camera when leaving the exam page ── */
+  useEffect(() => () => { try { streamRef.current?.getTracks().forEach((t) => t.stop()); } catch { /* noop */ } }, []);
 
   /* ── Submit helpers ── */
   const submitMcq = async () => {
@@ -111,7 +148,42 @@ export default function ExamPage() {
   };
 
   /* ── Flow transitions ── */
-  const startExam = () => setPhase(assessment.mcqEnabled ? "mcq" : "written");
+  // Proctoring violation → log it + show a transient on-screen warning.
+  // useCallback keeps a stable identity so <Proctor>'s tracking loop isn't restarted.
+  const onProctorFlag = useCallback((type) => {
+    proctorFlagsRef.current.push({ type, at: examStartRef.current ? Math.round((Date.now() - examStartRef.current) / 1000) : 0 });
+    const msg = type === "no_face" ? "Your face isn't visible — stay in front of the camera."
+      : type === "multiple_faces" ? "Another person was detected in the camera."
+      : "Please keep looking at the screen.";
+    setToast(msg);
+    setTimeout(() => setToast(""), 4000);
+  }, []);
+
+  // Stop recording → upload the exam video → save the video URL + flags.
+  const finalizeProctoring = async () => {
+    try {
+      const blob = await proctorRef.current?.stop?.();
+      try { streamRef.current?.getTracks().forEach((t) => t.stop()); } catch { /* noop */ }
+      let videoUrl = "";
+      if (blob && blob.size) videoUrl = await uploadBlob(blob, { folder: "nuvosid/exams", resourceType: "video", filename: "exam.webm" });
+      await apiFetch(`/api/student/assessments/${id}/proctor`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoUrl, flags: proctorFlagsRef.current }),
+      });
+    } catch { /* never block exam submission on a proctoring upload issue */ }
+  };
+
+  // Start the exam — camera is required for proctoring, so request it first.
+  const startExam = async () => {
+    setCamState("requesting");
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) { setCamState("denied"); return; }
+    try {
+      streamRef.current = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: true });
+    } catch { setCamState("denied"); return; }
+    examStartRef.current = Date.now();
+    setCamState("idle");
+    setPhase(assessment.mcqEnabled ? "mcq" : "written");
+  };
 
   const afterMcq = async () => {
     setSubmitting(true);
@@ -126,6 +198,7 @@ export default function ExamPage() {
     setPhase("submitting");
     await submitMcq();
     await submitWritten();
+    await finalizeProctoring();
     setPhase("done");
   };
 
@@ -133,8 +206,10 @@ export default function ExamPage() {
     setPhase("submitting");
     await submitMcq();
     await submitWritten();
+    await finalizeProctoring();
     setPhase("done");
   };
+  endFnRef.current = handleTimeout; // keep the ref on the freshest closure (latest answers)
 
   const doRetry = async () => {
     setSubmitting(true);
@@ -183,7 +258,8 @@ export default function ExamPage() {
       { icon: Clock, text: `You have ${EXAM_MINUTES} minutes to complete the exam. The timer starts as soon as you begin and cannot be paused.` },
       ...(assessment.mcqEnabled ? [{ icon: HelpCircle, text: `Section 1 — MCQ: ${assessment.mcqCount} question${assessment.mcqCount !== 1 ? "s" : ""}, one at a time. Passing score ${assessment.passingScore}%.` }] : []),
       ...(assessment.writtenEnabled ? [{ icon: FileText, text: `Section 2 — Written: ${assessment.writtenQuestions.length} question${assessment.writtenQuestions.length !== 1 ? "s" : ""}. Type your answers — copy & paste is disabled.` }] : []),
-      { icon: ShieldAlert, text: "Do not switch tabs or leave this window — it will be flagged. Your exam is submitted automatically when the time runs out." },
+      { icon: ShieldAlert, text: "Do not switch tabs or leave this window — it is flagged, and after 3 switches your exam is submitted automatically." },
+      { icon: Camera, text: "Your camera stays ON for proctoring (head & eye tracking). Sit in a well-lit place, alone, and keep looking at the screen. The session is recorded for review." },
     ];
     return (
       <Screen>
@@ -203,9 +279,14 @@ export default function ExamPage() {
               </div>
             ))}
           </div>
+          {camState === "denied" && (
+            <p className="text-sm text-rose-500 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2.5 mt-5">Camera & microphone access is required for this exam. Please allow it in your browser (click the camera icon in the address bar), then press Start again. Use <b>Google Chrome</b> on this secure (https) site.</p>
+          )}
           <div className="flex items-center justify-between gap-3 mt-6 pt-5 border-t pf-border">
             <button onClick={() => router.push("/student/assessments")} className="btn-pill inline-flex items-center gap-1.5 text-sm font-semibold border pf-border px-4 py-2 pf-hover transition"><ArrowLeft size={14} /> Cancel</button>
-            <button onClick={startExam} className="btn-pill inline-flex items-center gap-2 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-6 py-3 shadow-md shadow-rose-500/30 transition">Start Exam <ArrowRight size={16} /></button>
+            <button onClick={startExam} disabled={camState === "requesting"} className="btn-pill inline-flex items-center gap-2 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-6 py-3 shadow-md shadow-rose-500/30 transition disabled:opacity-60">
+              {camState === "requesting" ? <><Loader2 size={16} className="animate-spin" /> Enabling camera…</> : <>Start Exam <ArrowRight size={16} /></>}
+            </button>
           </div>
         </div>
       </Screen>
@@ -296,14 +377,32 @@ export default function ExamPage() {
         )}
       </div>
 
+      {/* Camera proctoring (head + eye tracking, recording) — corner panel */}
+      {streamRef.current && (
+        <Proctor stream={streamRef.current} active={inExam} startAt={examStartRef.current} onFlag={onProctorFlag} controlsRef={proctorRef} />
+      )}
+
+      {/* Live proctoring warning toast */}
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 inline-flex items-center gap-2 text-sm font-semibold text-white px-4 py-2.5 rounded-full shadow-lg" style={{ background: "rgba(217,119,6,0.95)" }}>
+          <Eye size={15} /> {toast}
+        </div>
+      )}
+
       {/* Anti-cheat warning overlay */}
       {showWarn && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
           <div className="pf-card p-7 max-w-sm w-full text-center">
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 text-[#db254f]" style={{ background: "rgba(219,37,79,0.12)" }}><ShieldAlert size={28} /></div>
-            <h3 className="text-lg font-extrabold">Please complete your exam</h3>
-            <p className="pf-muted text-sm mt-2">Switching tabs or leaving the exam window is not allowed. This has been recorded (warning {warnings}).</p>
-            <button onClick={() => setShowWarn(false)} className="btn-pill mt-5 inline-flex items-center gap-1.5 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-5 py-2.5 transition">Resume Exam</button>
+            <h3 className="text-lg font-extrabold">{warnings >= MAX_TAB_WARNINGS ? "Exam ended" : "Warning — don't leave the exam"}</h3>
+            {warnings >= MAX_TAB_WARNINGS ? (
+              <p className="pf-muted text-sm mt-2">You switched away {MAX_TAB_WARNINGS} times, so your exam has been submitted automatically.</p>
+            ) : (
+              <p className="pf-muted text-sm mt-2">Switching tabs or leaving the exam window is not allowed. <b className="text-[#db254f]">Warning {warnings} of {MAX_TAB_WARNINGS}</b> — at {MAX_TAB_WARNINGS} your exam is submitted automatically.</p>
+            )}
+            {warnings < MAX_TAB_WARNINGS && (
+              <button onClick={() => setShowWarn(false)} className="btn-pill mt-5 inline-flex items-center gap-1.5 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-5 py-2.5 transition">Resume Exam</button>
+            )}
           </div>
         </div>
       )}

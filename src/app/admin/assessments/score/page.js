@@ -222,6 +222,32 @@ export default function ScoreAssessmentPage() {
 
               {msg && <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center gap-2"><CheckCircle2 size={15} /> {msg}</div>}
 
+              {/* ── Exam proctoring (camera recording + head/eye flags) ── */}
+              {(A.mcqEnabled || A.writtenEnabled) && (
+                <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
+                  <h4 className="font-bold text-gray-900 flex items-center gap-2 mb-3"><Video size={16} className="text-[#db254f]" /> Exam Proctoring</h4>
+                  {sel.examVideoUrl
+                    ? <video src={sel.examVideoUrl} controls className="w-full rounded-xl border border-gray-200 bg-black max-h-[340px]" />
+                    : <p className="text-xs text-gray-400 bg-white border border-gray-200 rounded-lg px-3 py-2.5">No exam recording {(sel.mcqDone || sel.writtenSubmitted) ? "was captured for this attempt." : "yet — the exam hasn't been taken."}</p>}
+                  {(() => {
+                    const flags = sel.proctorFlags || [];
+                    const LABEL = { no_face: "Face not visible", multiple_faces: "Multiple people", looking_away: "Looked away" };
+                    const byType = flags.reduce((m, f) => { m[f.type] = (m[f.type] || 0) + 1; return m; }, {});
+                    const entries = Object.entries(byType);
+                    const mmss = (s) => `${Math.floor((s || 0) / 60)}:${String((s || 0) % 60).padStart(2, "0")}`;
+                    return (
+                      <div className="mt-3">
+                        <div className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2 flex items-center gap-1.5"><Eye size={13} className="text-[#db254f]" /> Flags ({flags.length})</div>
+                        {entries.length === 0
+                          ? <p className="text-xs text-emerald-600 font-medium">No violations detected — clean session ✓</p>
+                          : <div className="flex flex-wrap gap-2">{entries.map(([t, c]) => <span key={t} className="text-xs px-2.5 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200 font-medium">{LABEL[t] || t}: {c}</span>)}</div>}
+                        {flags.length > 0 && <div className="mt-2 text-[11px] text-gray-400 leading-relaxed">Timeline: {flags.slice(0, 25).map((f) => `${LABEL[f.type] || f.type} @ ${mmss(f.at)}`).join(" · ")}{flags.length > 25 ? " …" : ""}</div>}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
               {/* ── Written ── */}
               {A.writtenEnabled && (
                 <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">

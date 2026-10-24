@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Pencil, Trash2, Eye, EyeOff, Upload, GraduationCap, X, BookOpen, Plus } from "lucide-react";
+import { Pencil, Trash2, Eye, EyeOff, Upload, GraduationCap, X, BookOpen, Plus, ClipboardCheck } from "lucide-react";
 import AdminShell from "@/components/portal/AdminShell";
 import { useConfirm } from "@/components/portal/ConfirmDialog";
 import { DatePicker } from "@/components/portal/DateTimePicker";
@@ -50,6 +50,12 @@ export default function ManageStudentsPage() {
   const [bulkCourseId, setBulkCourseId] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState("");
+  // Assign individual (B2B) assessment
+  const [assessments, setAssessments] = useState([]);
+  const [asgOpen, setAsgOpen] = useState(false);
+  const [asgId, setAsgId] = useState("");
+  const [asgBusy, setAsgBusy] = useState(false);
+  const [asgMsg, setAsgMsg] = useState("");
 
   const toggleSel = (id) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const clearSel = () => setSelected(new Set());
@@ -70,6 +76,23 @@ export default function ManageStudentsPage() {
     } finally { setBulkBusy(false); }
   };
 
+  // Assign the selected students to an Individual (B2B) assessment.
+  const bulkAssignAssessment = async () => {
+    if (!asgId) { setAsgMsg("Please select an assessment"); return; }
+    setAsgBusy(true); setAsgMsg("");
+    try {
+      const res = await apiFetch(`/api/assessments/${asgId}/assign`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentIds: [...selected], action: "add" }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setAsgMsg(`Assigned to ${selected.size} student${selected.size !== 1 ? "s" : ""}.`);
+        setTimeout(() => { setAsgOpen(false); clearSel(); }, 1300);
+      } else setAsgMsg(d.error || "Failed to assign");
+    } finally { setAsgBusy(false); }
+  };
+
   const load = () =>
     apiFetch("/api/manage-students", { cache: "no-store" })
       .then((r) => r.json())
@@ -83,6 +106,11 @@ export default function ManageStudentsPage() {
       .then((r) => r.json())
       .then((d) => setCourses((d.courses || []).map((c) => ({ id: c.id, title: c.title }))))
       .catch(() => setCourses([]));
+    // Individual (B2B) assessments — these are the ones assignable to students.
+    apiFetch("/api/assessments", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setAssessments((d.assessments || []).filter((a) => a.audience === "B2B").map((a) => ({ id: a.id, title: a.title }))))
+      .catch(() => setAssessments([]));
   }, []);
 
   // Keep the assign modal's student in sync with the latest list after a change.
@@ -183,7 +211,7 @@ export default function ManageStudentsPage() {
   };
 
   const filtered = items.filter((s) =>
-    [s.name, s.email, s.contactNumber, s.country].join(" ").toLowerCase().includes(search.toLowerCase())
+    [s.name, s.email, s.contactNumber, s.country, s.institutionName].join(" ").toLowerCase().includes(search.toLowerCase())
   );
   const shown = filtered.slice(0, pageSize);
 
@@ -328,6 +356,7 @@ export default function ManageStudentsPage() {
             <span className="text-sm font-semibold text-[#db254f]">{selected.size} student{selected.size !== 1 ? "s" : ""} selected</span>
             <div className="flex items-center gap-2">
               <button onClick={() => { setBulkCourseId(""); setBulkMsg(""); setBulkOpen(true); }} className="inline-flex items-center gap-1.5 rounded-full btn-pill bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2 transition"><BookOpen size={15} /> Assign course</button>
+              <button onClick={() => { setAsgId(""); setAsgMsg(""); setAsgOpen(true); }} className="inline-flex items-center gap-1.5 rounded-full btn-pill bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold px-4 py-2 transition"><ClipboardCheck size={15} /> Assign assessment</button>
               <button onClick={clearSel} className="text-sm text-gray-500 hover:text-gray-800">Clear</button>
             </div>
           </div>
@@ -342,19 +371,19 @@ export default function ManageStudentsPage() {
                     checked={shown.length > 0 && shown.every((s) => selected.has(s.id))}
                     onChange={() => setSelected((sel) => { const n = new Set(sel); const all = shown.every((s) => n.has(s.id)); shown.forEach((s) => (all ? n.delete(s.id) : n.add(s.id))); return n; })} />
                 </th>
-                {["Sr. No.", "Image", "Name", "Email", "Contact", "Country", "Subscription", "Enrolled", "Status", "Actions"].map((h, i, a) => (
+                {["Sr. No.", "Image", "Name", "Email", "Contact", "Country", "Subscription", "Institution", "Enrolled", "Status", "Actions"].map((h, i, a) => (
                   <th key={h} className={`py-3 px-4 font-semibold ${i === a.length - 1 ? "rounded-r-lg" : ""}`}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={11} className="py-8 text-center text-gray-400">Loading…</td></tr>
+                <tr><td colSpan={12} className="py-8 text-center text-gray-400">Loading…</td></tr>
               ) : shown.length === 0 ? (
-                <tr><td colSpan={11} className="py-8 text-center text-gray-400">No students found.</td></tr>
+                <tr><td colSpan={12} className="py-8 text-center text-gray-400">No students found.</td></tr>
               ) : (
                 shown.map((s, i) => (
-                  <tr key={s.id} className={`hover:bg-gray-50 ${selected.has(s.id) ? "bg-rose-50/40" : ""}`}>
+                  <tr key={s.id} className="hover:bg-gray-50" style={selected.has(s.id) ? { background: "rgba(219,37,79,0.10)" } : undefined}>
                     <td className="py-3 px-4"><input type="checkbox" className="accent-[#db254f]" checked={selected.has(s.id)} onChange={() => toggleSel(s.id)} /></td>
                     <td className="py-3 px-4 text-gray-700">{i + 1}</td>
                     <td className="py-3 px-4">
@@ -364,7 +393,8 @@ export default function ManageStudentsPage() {
                     <td className="py-3 px-4 text-gray-500">{s.email}</td>
                     <td className="py-3 px-4 text-gray-500">{s.contactNumber || "—"}</td>
                     <td className="py-3 px-4 text-gray-500">{s.country || "—"}</td>
-                    <td className="py-3 px-4 text-gray-500">{s.subscriptionType}</td>
+                    <td className="py-3 px-4"><span className={`text-xs px-2 py-0.5 rounded font-semibold ${s.subscriptionType === "B2B" ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-500"}`}>{s.subscriptionType}</span></td>
+                    <td className="py-3 px-4 text-gray-500">{s.institutionName || "—"}</td>
                     <td className="py-3 px-4">
                       {s.enrolledCount > 0
                         ? <span title={(s.enrolledCourses || []).join(", ")} className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md font-medium bg-emerald-100 text-emerald-700">Enrolled · {s.enrolledCount}</span>
@@ -375,6 +405,7 @@ export default function ManageStudentsPage() {
                       <div className="flex items-center gap-2">
                         <button onClick={() => openView(s)} title="View" className="w-8 h-8 rounded-full btn-pill bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center"><Eye size={14} /></button>
                         <button onClick={() => openAssign(s)} title="Assign course" className="w-8 h-8 rounded-full btn-pill bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center"><BookOpen size={14} /></button>
+                        <button onClick={() => { setSelected(new Set([s.id])); setAsgId(""); setAsgMsg(""); setAsgOpen(true); }} title="Assign assessment" className="w-8 h-8 rounded-full btn-pill bg-indigo-500 hover:bg-indigo-600 text-white flex items-center justify-center"><ClipboardCheck size={14} /></button>
                         <button onClick={() => editItem(s)} title="Edit" className="w-8 h-8 rounded-full btn-pill bg-[#db254f] hover:bg-[#b91d40] text-white flex items-center justify-center"><Pencil size={14} /></button>
                         <button onClick={() => deleteItem(s.id)} title="Delete" className="w-8 h-8 rounded-full btn-pill bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center"><Trash2 size={14} /></button>
                       </div>
@@ -530,6 +561,34 @@ export default function ManageStudentsPage() {
               <div className="flex items-center gap-3 mt-5">
                 <button onClick={bulkAssign} disabled={bulkBusy} className="inline-flex items-center gap-1.5 rounded-full btn-pill bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-5 py-2.5 disabled:opacity-60 transition"><Plus size={15} /> {bulkBusy ? "Assigning…" : `Assign to ${selected.size}`}</button>
                 <button onClick={() => setBulkOpen(false)} disabled={bulkBusy} className="text-sm text-gray-500 hover:text-gray-800">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign individual (B2B) assessment to selected students */}
+      {asgOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => !asgBusy && setAsgOpen(false)}>
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-indigo-50/70 to-transparent">
+              <span className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center"><ClipboardCheck size={18} /></span>
+              <div>
+                <h3 className="font-bold text-gray-900">Assign assessment to {selected.size} student{selected.size !== 1 ? "s" : ""}</h3>
+                <p className="text-xs text-gray-500">Only Individual assessments are listed.</p>
+              </div>
+            </div>
+            <div className="p-6">
+              <label className={label}>Individual assessment</label>
+              <select className={field} value={asgId} onChange={(e) => setAsgId(e.target.value)}>
+                <option value="">-- Select an assessment --</option>
+                {assessments.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
+              </select>
+              {assessments.length === 0 && <p className="text-xs text-amber-600 mt-2">No Individual assessments yet. Create one on the Assessments page (choose “Individual”).</p>}
+              {asgMsg && <p className="text-sm mt-3 text-gray-600">{asgMsg}</p>}
+              <div className="flex items-center gap-3 mt-5">
+                <button onClick={bulkAssignAssessment} disabled={asgBusy} className="inline-flex items-center gap-1.5 rounded-full btn-pill bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold px-5 py-2.5 disabled:opacity-60 transition"><Plus size={15} /> {asgBusy ? "Assigning…" : `Assign to ${selected.size}`}</button>
+                <button onClick={() => setAsgOpen(false)} disabled={asgBusy} className="text-sm text-gray-500 hover:text-gray-800">Cancel</button>
               </div>
             </div>
           </div>

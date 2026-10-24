@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockAssessments, mockEnrollments, mockAssessmentResults } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
-import { isMcqCorrect } from "@/lib/assessmentFields";
+import { isMcqCorrect, studentHasAccess } from "@/lib/assessmentFields";
 import Assessment from "@/models/Assessment";
 import Enrollment from "@/models/Enrollment";
 import AssessmentResult from "@/models/AssessmentResult";
@@ -28,7 +28,7 @@ export async function POST(request, { params }) {
   }
 
   const enrollments = useMock ? mockEnrollments().filter((e) => e.studentId === auth.id) : await Enrollment.find({ studentId: auth.id }).lean();
-  if (!enrollments.some((e) => e.courseTitle === a.course)) return NextResponse.json({ error: "Not enrolled" }, { status: 403 });
+  if (!studentHasAccess(a, auth.id, enrollments)) return NextResponse.json({ error: "Not enrolled" }, { status: 403 });
 
   // One attempt
   const existing = useMock

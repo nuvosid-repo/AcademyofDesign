@@ -409,21 +409,21 @@ export default function CourseLearningPage() {
           {currentVideo?.url ? (
             <>
               <VideoEmbed key={currentVideo.url} url={currentVideo.url} title={currentVideo.title} onComplete={markComplete} controlsRef={playerControls} onPlayState={setIsPlaying} />
-              <div className="mt-4 flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <span className="text-xs uppercase tracking-wide text-[#db254f] font-semibold">{currentVideo.className}</span>
-                  <h2 className="font-bold text-xl mt-1" style={{ marginTop: "0.25rem", marginBottom: 0 }}>{currentVideo.title || "Untitled video"}</h2>
-                  {currentVideo.description && <p className="pf-muted text-sm mt-2 leading-relaxed">{currentVideo.description}</p>}
+              <div className="mt-4">
+                <div className="float-right ml-4 mb-1">
+                  {curVideoDone ? (
+                    <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-500 bg-emerald-500/12 px-3.5 py-2 rounded-full">
+                      <CheckCircle2 size={16} /> Completed
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium pf-faint px-3 py-2 rounded-full" style={{ background: "rgba(var(--fg-rgb),0.05)" }}>
+                      {saving ? "Saving…" : "Watch fully to unlock next"}
+                    </span>
+                  )}
                 </div>
-                {curVideoDone ? (
-                  <span className="shrink-0 inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-500 bg-emerald-500/12 px-3.5 py-2 rounded-full">
-                    <CheckCircle2 size={16} /> Completed
-                  </span>
-                ) : (
-                  <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-medium pf-faint px-3 py-2 rounded-full" style={{ background: "rgba(var(--fg-rgb),0.05)" }}>
-                    {saving ? "Saving…" : "Watch fully to unlock next"}
-                  </span>
-                )}
+                <span className="text-xs uppercase tracking-wide text-[#db254f] font-semibold">{currentVideo.className}</span>
+                <h2 className="font-bold text-xl mt-1" style={{ marginTop: "0.25rem", marginBottom: 0 }}>{currentVideo.title || "Untitled video"}</h2>
+                {currentVideo.description && <p className="pf-muted text-sm mt-2 leading-relaxed clear-both text-justify">{currentVideo.description}</p>}
               </div>
             </>
           ) : (

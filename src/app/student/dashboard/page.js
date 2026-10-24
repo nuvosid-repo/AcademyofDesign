@@ -386,7 +386,7 @@ export default function StudentDashboard() {
                   key={l.id}
                   className="flex items-center justify-between gap-2 rounded-xl border pf-border p-2.5 pf-hover transition"
                 >
-                  <div className="min-w-0">
+                  <div className="flex-1 min-w-0">
                     <div className="font-semibold text-sm truncate">
                       {l.title}
                     </div>
@@ -475,7 +475,7 @@ export default function StudentDashboard() {
                 <div className="w-10 h-10 rounded-xl pf-chip flex items-center justify-center shrink-0">
                   <BookOpen size={18} />
                 </div>
-                <div className="min-w-0">
+                <div className="flex-1 min-w-0">
                   <span className="text-[11px] uppercase tracking-wide text-[#db254f] font-semibold block truncate">
                     {c.category || "Course"}
                   </span>

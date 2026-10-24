@@ -29,7 +29,11 @@ const MarkedQuestionSchema = new mongoose.Schema(
 // (interviewer-graded). Completing them contributes to the student's score.
 const AssessmentSchema = new mongoose.Schema({
   title: { type: String, required: [true, "Please provide a title"], trim: true },
-  course: { type: String, default: "" }, // course title
+  course: { type: String, default: "" }, // course title (B2C: all students of this course)
+  // Who the assessment is for: B2C = everyone enrolled in `course`;
+  // B2B = only the specific students in `assignedStudentIds`.
+  audience: { type: String, enum: ["B2C", "B2B"], default: "B2C" },
+  assignedStudentIds: { type: [String], default: [] },
   description: { type: String, default: "" },
   type: { type: String, default: "MCQ" }, // legacy; the combined flow uses the flags below
 

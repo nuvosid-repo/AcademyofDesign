@@ -4,7 +4,7 @@ import {
   Plus, Trash2, Download, Save, Check, Loader2, GraduationCap, Briefcase, Sparkles,
   User, FolderOpen, Award, Palette, ChevronUp, ChevronDown, Copy, Search, X, ImagePlus,
   Sofa, Shirt, PenTool, MonitorSmartphone, Box, Clapperboard, Camera, Shapes, ArrowRight,
-  FileText, Maximize2, Minimize2, PencilLine, Eye,
+  FileText, Maximize2, Minimize2, PencilLine, Eye, UploadCloud, AlertCircle, RefreshCw,
 } from "lucide-react";
 import StudentShell from "@/components/portal/StudentShell";
 import { useSession } from "@/context/SessionContext";
@@ -76,6 +76,16 @@ async function uploadImage(file) {
   return dataUrl; // fallback: base64 (server offloads on save)
 }
 
+// ── AI resume parser ─────────────────────────────────────────────────────────
+// Sends a PDF or image file to /api/student/resume/parse (Claude vision).
+// Returns { parsed } on success or { error } on failure.
+async function parseResumeFile(file) {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await apiFetch("/api/student/resume/parse", { method: "POST", body: form });
+  return res.json();
+}
+
 // ── preview pane: fits the 794px A4 paper to the panel width (or 100% zoom) ──
 // Width AND paper height are tracked with ResizeObservers so the clip box always
 // matches the real (scaled) content — nothing below the header gets cut off.
@@ -141,6 +151,10 @@ export default function ResumeBuilderPage() {
   const [skillQuery, setSkillQuery] = useState("");
   const [customSkill, setCustomSkill] = useState("");
   const [zoom, setZoom] = useState("fit"); // "fit" | 1
+  // ── AI upload/parse state ──
+  const [parsing, setParsing] = useState(false);
+  const [parseError, setParseError] = useState("");
+  const uploadInputRef = useRef(null);
   const loadedRef = useRef(false);
   const printRef = useRef(null);
 
@@ -253,13 +267,100 @@ export default function ResumeBuilderPage() {
     setData(getStarterSample(data.discipline));
   };
 
+  /* ── AI parse: upload an existing resume → extract data → populate builder ── */
+  const handleResumeUpload = async (file, disciplineId) => {
+    if (!file) return;
+    setParseError("");
+    setParsing(true);
+    try {
+      const result = await parseResumeFile(file);
+      if (result.error) {
+        setParseError(result.error);
+        return;
+      }
+      // Merge the parsed basics with the user's known name/email as fallback.
+      const merged = {
+        ...result.parsed,
+        discipline: disciplineId || "interior_design",
+        basics: {
+          ...result.parsed.basics,
+          name: result.parsed.basics?.name || user?.name || "",
+          email: result.parsed.basics?.email || user?.email || "",
+        },
+      };
+      const cleaned = cleanResumeData(merged);
+      setData(cleaned);
+      setActive("basics");
+      setPhase("builder");
+      loadedRef.current = true;
+      save(cleaned, false);
+    } catch (err) {
+      setParseError("Something went wrong while parsing. Please try again.");
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  /* ── Re-parse from builder toolbar (replaces current data after confirm) ── */
+  const reparseInBuilder = async (file) => {
+    if (!file) return;
+    if (!window.confirm("This will replace your current resume data with content extracted from the uploaded file. Continue?")) return;
+    await handleResumeUpload(file, data?.discipline);
+  };
+
   /* ───────────────── render ───────────────── */
   if (phase === "loading") return <StudentShell subtitle="Resume Builder"><div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#db254f]" size={28} /></div></StudentShell>;
 
   if (phase === "onboarding") return (
     <StudentShell subtitle="Resume Builder">
+      {/* ── Upload existing resume panel ── */}
+      <div className="max-w-4xl mx-auto mb-8">
+        <div className="pf-card p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center gap-6"
+          style={{ background: "linear-gradient(135deg, rgba(219,37,79,0.07), rgba(229,107,133,0.04))" }}>
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 text-white shadow-lg shadow-rose-500/25"
+            style={{ background: "linear-gradient(135deg,#db254f,#e56b85)" }}>
+            <UploadCloud size={26} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-lg leading-tight">Already have a resume?</h3>
+            <p className="pf-muted text-sm mt-1">
+              Upload your existing PDF or image — AI will extract all your details and pre-fill the builder.
+              Any blank fields can be filled in or corrected afterwards.
+            </p>
+            {parseError && (
+              <div className="mt-2 flex items-start gap-2 text-rose-500 text-sm">
+                <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                <span>{parseError}</span>
+              </div>
+            )}
+          </div>
+          <div className="shrink-0">
+            <button
+              type="button"
+              onClick={() => uploadInputRef.current?.click()}
+              disabled={parsing}
+              className="inline-flex items-center gap-2 rounded-full bg-[#db254f] hover:bg-[#b91d40] text-white text-sm font-semibold px-4 py-2.5 shadow-sm shadow-rose-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {parsing ? <><Loader2 size={15} className="animate-spin" /> Parsing…</> : <><UploadCloud size={15} /> Upload Resume</>}
+            </button>
+            <input
+              ref={uploadInputRef}
+              type="file"
+              accept=".pdf,image/png,image/jpeg,image/webp"
+              className="hidden"
+              disabled={parsing}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) handleResumeUpload(file, "interior_design");
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
       <div className="max-w-2xl mx-auto text-center mb-9">
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-wide uppercase text-[#db254f] px-3 py-1 rounded-full mb-4" style={{ background: "rgba(219,37,79,0.1)" }}><Sparkles size={13} /> Portfolio résumé builder</span>
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-wide uppercase text-[#db254f] px-3 py-1 rounded-full mb-4" style={{ background: "rgba(219,37,79,0.1)" }}><Sparkles size={13} /> Or start from scratch</span>
         <h2 className="text-3xl font-extrabold tracking-tight">Build a résumé that shows your work</h2>
         <p className="pf-muted mt-2">Choose your design discipline — the builder tailors its skill bank, sections, templates and a starter sample to it.</p>
       </div>
@@ -322,6 +423,15 @@ export default function ResumeBuilderPage() {
 
   return (
     <StudentShell subtitle="Resume Builder">
+      {/* ── Parse error banner (shown when re-parsing from toolbar fails) ── */}
+      {parseError && (
+        <div className="pf-card mb-4 px-4 py-3 flex items-center gap-3 border border-rose-500/30 bg-rose-500/5">
+          <AlertCircle size={16} className="text-rose-500 shrink-0" />
+          <span className="text-sm text-rose-500 flex-1">{parseError}</span>
+          <button onClick={() => setParseError("")} className="text-rose-400 hover:text-rose-600 shrink-0"><X size={15} /></button>
+        </div>
+      )}
+
       {/* ── Toolbar ── */}
       <div className="pf-card px-4 sm:px-5 py-4 mb-5 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
@@ -336,12 +446,52 @@ export default function ResumeBuilderPage() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2.5">
-          <span className="text-xs font-medium inline-flex items-center gap-1.5 pf-faint">
-            {saving ? <><Loader2 size={13} className="animate-spin" /> Saving…</> : savedMsg ? <><Check size={13} className="text-emerald-500" /> {savedMsg}</> : null}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Status indicator */}
+          <span className="text-xs font-medium inline-flex items-center gap-1.5 pf-faint mr-1">
+            {parsing ? <><Loader2 size={13} className="animate-spin text-[#db254f]" /> Parsing…</> :
+             saving   ? <><Loader2 size={13} className="animate-spin" /> Saving…</>   :
+             savedMsg ? <><Check size={13} className="text-emerald-500" /> {savedMsg}</>  : null}
           </span>
-          <button onClick={() => save(data, false)} disabled={saving} className="inline-flex items-center gap-2 rounded-full border pf-border px-4 py-2.5 text-sm font-semibold pf-hover transition disabled:opacity-60"><Save size={15} className="text-[#db254f]" /> Save</button>
-          <button onClick={download} className="inline-flex items-center gap-2 rounded-full bg-[#db254f] hover:bg-[#b91d40] text-white text-sm font-semibold px-4 py-2.5 shadow-sm shadow-rose-500/30 transition"><Download size={15} /> PDF</button>
+
+          {/* Upload your resume */}
+          <button
+            type="button"
+            onClick={() => uploadInputRef.current?.click()}
+            disabled={parsing}
+            className="inline-flex items-center gap-2 rounded-full border pf-border px-4 py-2.5 text-sm font-semibold pf-hover transition whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <UploadCloud size={15} className="text-[#db254f] shrink-0" />
+            Upload your resume
+          </button>
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept=".pdf,image/png,image/jpeg,image/webp"
+            className="hidden"
+            disabled={parsing}
+            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) reparseInBuilder(f); }}
+          />
+
+          {/* Save */}
+          <button
+            onClick={() => save(data, false)}
+            disabled={saving || parsing}
+            className="inline-flex items-center gap-2 rounded-full border pf-border px-4 py-2.5 text-sm font-semibold pf-hover transition disabled:opacity-50"
+          >
+            <Save size={15} className="text-[#db254f] shrink-0" />
+            Save
+          </button>
+
+          {/* PDF download — primary filled */}
+          <button
+            onClick={download}
+            disabled={parsing}
+            className="inline-flex items-center gap-2 rounded-full bg-[#db254f] hover:bg-[#b91d40] text-white text-sm font-semibold px-4 py-2.5 shadow-sm shadow-rose-500/30 transition disabled:opacity-50"
+          >
+            <Download size={15} className="shrink-0" />
+            PDF
+          </button>
         </div>
       </div>
 

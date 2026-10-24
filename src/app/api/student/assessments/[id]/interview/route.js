@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUseMock, mockAssessments, mockEnrollments, mockAssessmentResults } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
-import { serializeAssessment, pickSet } from "@/lib/assessmentFields";
+import { serializeAssessment, pickSet, studentHasAccess } from "@/lib/assessmentFields";
 import { isAIConfigured, gradeWrittenAnswers } from "@/lib/ai";
 import Assessment from "@/models/Assessment";
 import Enrollment from "@/models/Enrollment";
@@ -30,7 +30,7 @@ export async function POST(request, { params }) {
   if (!s.interviewEnabled) return NextResponse.json({ error: "This assessment has no interview" }, { status: 400 });
 
   const enrollments = useMock ? mockEnrollments().filter((e) => e.studentId === auth.id) : await Enrollment.find({ studentId: auth.id }).lean();
-  if (!enrollments.some((e) => e.courseTitle === s.course)) return NextResponse.json({ error: "Not enrolled" }, { status: 403 });
+  if (!studentHasAccess(s, auth.id, enrollments)) return NextResponse.json({ error: "Not enrolled" }, { status: 403 });
 
   const existing = useMock
     ? mockAssessmentResults().find((r) => r.studentId === auth.id && r.assessmentId === id)

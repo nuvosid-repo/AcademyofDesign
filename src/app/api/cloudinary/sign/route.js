@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Folders the browser is allowed to upload into (prevents arbitrary targets).
-const ALLOWED = new Set(["nuvosid/resumes"]);
+const ALLOWED = new Set(["nuvosid/resumes", "nuvosid/exams"]);
 
 // POST /api/cloudinary/sign { folder } — returns a signed payload so the browser
 // can upload an image straight to Cloudinary (keeping base64 out of autosave).

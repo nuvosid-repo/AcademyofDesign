@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { resolveUseMock, mockAssessments, mockEnrollments, mockAssessmentResults } from "@/lib/db";
+import { resolveUseMock, mockAssessments, mockEnrollments, mockAssessmentResults, mockStudents } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { serializeAssessment, pickSet, combinedResult } from "@/lib/assessmentFields";
 import Assessment from "@/models/Assessment";
 import Enrollment from "@/models/Enrollment";
 import AssessmentResult from "@/models/AssessmentResult";
+import Student from "@/models/Student";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,23 +25,36 @@ export async function GET(request, { params }) {
   if (!a) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const s = serializeAssessment(a);
 
-  const [enrollments, results] = useMock
-    ? [mockEnrollments().filter((e) => e.courseTitle === s.course), mockAssessmentResults().filter((r) => r.assessmentId === id)]
-    : await Promise.all([
-        Enrollment.find({ courseTitle: s.course }).lean(),
-        AssessmentResult.find({ assessmentId: id }).lean(),
-      ]);
-
+  const results = useMock
+    ? mockAssessmentResults().filter((r) => r.assessmentId === id)
+    : await AssessmentResult.find({ assessmentId: id }).lean();
   const resultBy = {};
   for (const r of results) resultBy[r.studentId] = r;
 
-  // Unique enrolled students
-  const seen = new Set();
+  // Who appears in the grading list:
+  //   B2B → the specific assigned students; B2C → everyone enrolled in the course.
+  let participants = [];
+  if (s.audience === "B2B") {
+    const ids = s.assignedStudentIds || [];
+    const docs = useMock
+      ? mockStudents().filter((st) => ids.includes((st._id && st._id.toString()) || st.id))
+      : await Student.find({ _id: { $in: ids } }).select("name email").lean().catch(() => []);
+    participants = docs.map((st) => ({ studentId: (st._id && st._id.toString()) || st.id, name: st.name || "", email: st.email || "" }));
+  } else {
+    const enrollments = useMock
+      ? mockEnrollments().filter((e) => e.courseTitle === s.course)
+      : await Enrollment.find({ courseTitle: s.course }).lean();
+    const seen = new Set();
+    for (const e of enrollments) {
+      if (!e.studentId || seen.has(e.studentId)) continue;
+      seen.add(e.studentId);
+      participants.push({ studentId: e.studentId, name: e.studentName || "", email: e.studentEmail || "" });
+    }
+  }
+
   const students = [];
-  for (const e of enrollments) {
-    if (!e.studentId || seen.has(e.studentId)) continue;
-    seen.add(e.studentId);
-    const r = resultBy[e.studentId] || {};
+  for (const p of participants) {
+    const r = resultBy[p.studentId] || {};
     // Grade against the question set this student actually took (A or B).
     const examSet = r.examSet || ((r.attempt || 1) >= 2 ? "B" : "A");
     const setQ = pickSet(s, examSet);
@@ -48,15 +62,17 @@ export async function GET(request, { params }) {
     students.push({
       combinedReady: combined.ready, combinedPercentage: combined.percentage, combinedPassed: combined.passed,
       combinedScore: combined.totalScore, combinedTotal: combined.totalMax,
-      studentId: e.studentId,
-      name: e.studentName || r.studentName || "",
-      email: e.studentEmail || "",
+      studentId: p.studentId,
+      name: p.name || r.studentName || "",
+      email: p.email || "",
       attempt: r.attempt || 1, examSet,
       writtenQuestions: setQ.writtenQuestions, interviewQuestions: setQ.interviewQuestions,
       mcqDone: !!r.mcqDone, mcqScore: r.mcqScore || 0, mcqTotal: r.mcqTotal || 0, mcqPercentage: r.mcqPercentage || 0, mcqPassed: !!r.passed,
       writtenSubmitted: !!r.writtenSubmitted, writtenGraded: !!r.writtenGraded, writtenScore: r.writtenScore || 0, writtenTotal: r.writtenTotal || 0,
       writtenAnswers: r.writtenAnswers || [],
       writtenBreakdown: r.writtenBreakdown || [],
+      examVideoUrl: r.examVideoUrl || "",
+      proctorFlags: r.proctorFlags || [],
       interviewGraded: !!r.interviewGraded, interviewScore: r.interviewScore || 0, interviewTotal: r.interviewTotal || 0,
       interviewBreakdown: r.interviewBreakdown || [],
       interviewVideoUrl: r.interviewVideoUrl || "",

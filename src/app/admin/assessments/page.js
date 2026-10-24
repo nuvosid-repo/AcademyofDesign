@@ -14,6 +14,7 @@ const blankMarked = () => ({ question: "", maxMarks: 10, modelAnswer: "", media:
 
 const EMPTY = {
   title: "", course: "", description: "", status: "Active",
+  audience: "B2C", // B2C = whole course; B2B = individual (assigned to students from the Students page)
   mcqEnabled: false, questions: [blankMCQ()], passingScore: 60,
   writtenEnabled: false, writtenQuestions: [blankMarked()],
   interviewEnabled: false, interviewDate: "", interviewTime: "", interviewLink: "", interviewer: "",
@@ -117,6 +118,7 @@ export default function AssessmentsPage() {
     e.preventDefault();
     setError("");
     if (!form.title.trim()) { setError("Title is required"); return; }
+    if (form.audience !== "B2B" && !form.course) { setError("Select a course for this assessment (or choose Individual)"); return; }
     if (!form.mcqEnabled && !form.writtenEnabled && !form.interviewEnabled) { setError("Enable at least one section"); return; }
     if (form.mcqEnabled && !form.questions.some((q) => q.question.trim())) { setError("Add at least one MCQ question in Set A"); return; }
     if (form.setBEnabled && form.mcqEnabled && !(form.questionsB || []).some((q) => q.question.trim())) { setError("Set B is enabled — add at least one MCQ question in Set B (switch to the Set B tab)"); return; }
@@ -151,6 +153,7 @@ export default function AssessmentsPage() {
     try { const r = await apiFetch(`/api/assessments/${row.id}`, { cache: "no-store" }); const d = await r.json(); if (r.ok && d.assessment) a = d.assessment; } catch { /* fall back to row */ }
     setForm({
       title: a.title, course: a.course || "", description: a.description || "", status: a.status || "Active",
+      audience: a.audience === "B2B" ? "B2B" : "B2C",
       mcqEnabled: !!a.mcqEnabled,
       questions: loadMCQ(a.questions),
       passingScore: a.passingScore || 60,
@@ -225,16 +228,34 @@ export default function AssessmentsPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div><label className={label}>Title</label><input className={field} placeholder="e.g. Final Assessment" value={form.title} onChange={(e) => set("title", e.target.value)} /></div>
-            <div><label className={label}>Course</label>
-              <select className={field} value={form.course} onChange={(e) => set("course", e.target.value)}>
-                <option value="">--Select course--</option>
-                {courses.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
+            <div><label className={label}>Assessment type</label>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => set("audience", "B2C")} className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition ${form.audience === "B2C" ? "border-[#db254f] bg-rose-50 text-[#db254f]" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>Whole Course</button>
+                <button type="button" onClick={() => set("audience", "B2B")} className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition ${form.audience === "B2B" ? "border-[#db254f] bg-rose-50 text-[#db254f]" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>Individual</button>
+              </div>
             </div>
             <div><label className={label}>Status</label>
               <select className={field} value={form.status} onChange={(e) => set("status", e.target.value)}>{STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select>
             </div>
           </div>
+
+          {/* Audience target: a course (B2C) OR specific students (B2B) */}
+          {form.audience === "B2C" ? (
+            <div>
+              <label className={label}>Course</label>
+              <select className={field} value={form.course} onChange={(e) => set("course", e.target.value)}>
+                <option value="">--Select course--</option>
+                {courses.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">Everyone enrolled in this course will see the assessment.</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 px-4 py-3 flex items-start gap-2.5">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-semibold mt-0.5">Individual</span>
+              <p className="text-sm text-gray-600">Create this assessment now. Then go to <b>Students</b> → select the student(s) → <b>Assign Assessment</b> to give it to specific people. It won't appear for anyone until you assign it there.</p>
+            </div>
+          )}
+
           <div><label className={label}>Description</label><textarea rows={2} className={`${field} resize-y`} value={form.description} onChange={(e) => set("description", e.target.value)} /></div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -453,7 +474,11 @@ export default function AssessmentsPage() {
                   <tr key={a.id} className="hover:bg-gray-50">
                     <td className="py-3 px-4 text-gray-700">{i + 1}</td>
                     <td className="py-3 px-4 font-medium text-gray-900 whitespace-normal max-w-[16rem]">{a.title}</td>
-                    <td className="py-3 px-4 text-gray-500">{a.course || "—"}</td>
+                    <td className="py-3 px-4 text-gray-500">
+                      {a.audience === "B2B"
+                        ? <span className="inline-flex items-center gap-1.5"><span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-semibold">Individual</span> {(a.assignedStudentIds || []).length} student{(a.assignedStudentIds || []).length === 1 ? "" : "s"}</span>
+                        : (a.course || "—")}
+                    </td>
                     <td className="py-3 px-4">
                       <div className="flex flex-wrap gap-1">
                         {sectionCount(a).map((s) => <span key={s} className="text-xs px-2 py-0.5 rounded-md font-medium bg-rose-50 text-[#db254f]">{s}</span>)}

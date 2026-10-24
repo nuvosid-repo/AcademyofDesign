@@ -11,7 +11,7 @@ export default function AuthModal() {
   const { isOpen, mode, setMode, closeModal } = useAuth();
   const router = useRouter();
 
-  const [formData, setFormData] = useState({ name: "", email: "", contactNumber: "", password: "" });
+  const [formData, setFormData] = useState({ name: "", email: "", contactNumber: "", institutionName: "", password: "" });
   const [error,    setError]    = useState("");
   const [success,  setSuccess]  = useState("");
   const [loading,  setLoading]  = useState(false);
@@ -21,7 +21,7 @@ export default function AuthModal() {
 
   /* reset form when modal opens or mode switches */
   useEffect(() => {
-    setFormData({ name: "", email: "", contactNumber: "", password: "" });
+    setFormData({ name: "", email: "", contactNumber: "", institutionName: "", password: "" });
     setError("");
     setSuccess("");
     setLoading(false);
@@ -218,6 +218,28 @@ export default function AuthModal() {
                       placeholder="10-digit mobile number"
                       required={!isLogin}
                       autoComplete="tel"
+                    />
+                  </motion.div>
+                )}
+
+                {!isLogin && (
+                  <motion.div
+                    key="institute"
+                    initial={{ opacity: 0, height: 0,    marginBottom: 0 }}
+                    animate={{ opacity: 1, height: "auto", marginBottom: "1.2rem" }}
+                    exit={{    opacity: 0, height: 0,    marginBottom: 0 }}
+                    style={{ overflow: "hidden" }}
+                  >
+                    <label className={styles.label} htmlFor="am-institute">Institute Name <span style={{ opacity: 0.55, fontWeight: 400 }}>(optional)</span></label>
+                    <input
+                      className={styles.input}
+                      id="am-institute"
+                      name="institutionName"
+                      type="text"
+                      value={formData.institutionName}
+                      onChange={handleChange}
+                      placeholder="Your institute / organization (if any)"
+                      autoComplete="organization"
                     />
                   </motion.div>
                 )}

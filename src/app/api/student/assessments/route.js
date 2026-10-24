@@ -29,8 +29,17 @@ export async function GET(request) {
   const resultByAid = {};
   for (const r of results) resultByAid[r.assessmentId] = r;
 
+  // A student sees an assessment when it's Active AND either:
+  //   • B2B — they are in the assessment's assignedStudentIds, or
+  //   • B2C — they are enrolled (active) in the assessment's course.
+  const visibleTo = (a) => {
+    if ((a.status || "Active") === "Inactive") return false;
+    if (a.audience === "B2B") return (a.assignedStudentIds || []).map(String).includes(auth.id);
+    return !!(a.course && titles.has(a.course));
+  };
+
   const assessments = all
-    .filter((a) => (a.status || "Active") !== "Inactive" && a.course && titles.has(a.course))
+    .filter(visibleTo)
     .map((a) => {
       const s = serializeAssessment(a);
       const r = resultByAid[s.id] || {};

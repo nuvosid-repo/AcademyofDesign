@@ -46,6 +46,8 @@ export function serializeAssessment(a) {
     id: (a._id && a._id.toString()) || a.id,
     title: a.title,
     course: a.course || "",
+    audience: a.audience === "B2B" ? "B2B" : "B2C",
+    assignedStudentIds: a.assignedStudentIds || [],
     description: a.description || "",
     status: a.status || "Active",
     mcqEnabled,
@@ -97,10 +99,20 @@ export function pickSet(s, examSet) {
   };
 }
 
+// Whether a student may take/submit an assessment:
+//   B2B → must be in assignedStudentIds; B2C → must be enrolled in its course.
+export function studentHasAccess(a, studentId, enrollments) {
+  if ((a?.audience || "B2C") === "B2B") return (a?.assignedStudentIds || []).map(String).includes(String(studentId));
+  return (enrollments || []).some((e) => e.courseTitle === (a?.course || ""));
+}
+
 export function buildAssessmentDoc(b) {
+  // NOTE: assignedStudentIds is NOT set here — it's managed from the Students
+  // page (assign/unassign), so editing an assessment never wipes assignments.
   return {
     title: (b.title || "").trim(),
     course: (b.course || "").trim(),
+    audience: b.audience === "B2B" ? "B2B" : "B2C",
     description: (b.description || "").trim(),
     status: b.status === "Inactive" ? "Inactive" : "Active",
     type: "MCQ", // legacy field, unused by the combined flow

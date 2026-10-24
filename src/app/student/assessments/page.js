@@ -80,27 +80,27 @@ export default function StudentAssessmentsPage() {
             return (
               <div key={a.id} className="pf-card p-6">
                 {/* Header */}
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-xs text-[#db254f] font-semibold uppercase tracking-wide">{a.course}</p>
-                    <h3 className="font-bold text-lg mt-0.5">{a.title}</h3>
-                    {a.description && <p className="pf-muted text-sm mt-1.5">{a.description}</p>}
-                  </div>
+                <div>
                   {examEnabled && (
-                    a.canRetry
-                      ? <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(245,158,11,0.15)" }}><RefreshCw size={13} /> Failed · retry</span>
-                      : a.combinedReady
-                        ? (a.combinedPassed
-                            ? <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(16,185,129,0.15)" }}><CheckCircle2 size={14} /> Passed</span>
-                            : <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(244,63,94,0.15)" }}>Not passed</span>)
-                        : examDone
-                          ? <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(245,158,11,0.15)" }}><Clock size={13} /> Awaiting result</span>
-                          : <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-[#db254f] px-3 py-1.5 rounded-full" style={{ background: "rgba(219,37,79,0.1)" }}>{onSetB ? "Attempt 2 · Set B" : "Pending"}</span>
+                    <div className="float-right ml-4 mb-1">
+                      {a.canRetry
+                        ? <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(245,158,11,0.15)" }}><RefreshCw size={13} /> Failed · retry</span>
+                        : a.combinedReady
+                          ? (a.combinedPassed
+                              ? <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(16,185,129,0.15)" }}><CheckCircle2 size={14} /> Passed</span>
+                              : <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(244,63,94,0.15)" }}>Not passed</span>)
+                          : examDone
+                            ? <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(245,158,11,0.15)" }}><Clock size={13} /> Awaiting result</span>
+                            : <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#db254f] px-3 py-1.5 rounded-full" style={{ background: "rgba(219,37,79,0.1)" }}>{onSetB ? "Attempt 2 · Set B" : "Pending"}</span>}
+                    </div>
                   )}
+                  <p className="text-xs text-[#db254f] font-semibold uppercase tracking-wide">{a.course}</p>
+                  <h3 className="font-bold text-lg mt-0.5">{a.title}</h3>
+                  {a.description && <p className="pf-muted text-sm mt-1.5 text-justify">{a.description}</p>}
                 </div>
 
                 {/* Section chips */}
-                <div className="flex flex-wrap gap-2 mt-4">
+                <div className="flex flex-wrap gap-2 mt-4 clear-both">
                   {a.mcqEnabled && <SectionChip icon={HelpCircle} label={`${a.mcqCount} MCQ`} />}
                   {a.writtenEnabled && <SectionChip icon={FileText} label={`${a.writtenQuestions.length} Written`} />}
                   {a.interviewEnabled && <SectionChip icon={Users} label="Live Interview" />}

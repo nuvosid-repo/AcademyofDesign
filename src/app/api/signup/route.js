@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // "Manage Students" page shows), so new signups appear in the admin panel.
 export async function POST(request) {
   try {
-    const { name, email, password, contactNumber } = await request.json().catch(() => ({}));
+    const { name, email, password, contactNumber, institutionName } = await request.json().catch(() => ({}));
     if (!name || !email || !password) {
       return NextResponse.json(
         { error: "Please provide all required fields" },
@@ -19,6 +19,10 @@ export async function POST(request) {
     }
     const cleanEmail = email.trim().toLowerCase();
     const contact = (contactNumber || "").trim();
+    const institute = (institutionName || "").trim();
+    // If the user signed up under an institute, treat them as a B2B student so
+    // the admin can easily spot/group them.
+    const subscriptionType = institute ? "B2B" : "B2C";
     const hashed = await bcrypt.hash(password, await bcrypt.genSalt(10));
 
     const useMock = await resolveUseMock();
@@ -28,7 +32,7 @@ export async function POST(request) {
       if (store.find((s) => s.email === cleanEmail)) {
         return NextResponse.json({ error: "User with this email already exists" }, { status: 400 });
       }
-      store.unshift({ _id: "st_" + Date.now(), name, email: cleanEmail, contactNumber: contact, password: hashed, status: "Active", subscriptionType: "B2C", createdAt: new Date() });
+      store.unshift({ _id: "st_" + Date.now(), name, email: cleanEmail, contactNumber: contact, institutionName: institute, password: hashed, status: "Active", subscriptionType, createdAt: new Date() });
       return NextResponse.json({ message: "User created successfully (Mock Mode)", success: true }, { status: 201 });
     }
 
@@ -36,7 +40,7 @@ export async function POST(request) {
     if (existing) {
       return NextResponse.json({ error: "User with this email already exists" }, { status: 400 });
     }
-    await Student.create({ name, email: cleanEmail, contactNumber: contact, password: hashed, status: "Active" });
+    await Student.create({ name, email: cleanEmail, contactNumber: contact, institutionName: institute, subscriptionType, password: hashed, status: "Active" });
     return NextResponse.json({ message: "User created successfully", success: true }, { status: 201 });
   } catch (error) {
     console.error("Signup error:", error);
