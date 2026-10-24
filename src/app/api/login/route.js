@@ -16,6 +16,9 @@ export async function POST(request) {
         { status: 400 }
       );
     }
+    // Normalize the email the same way signup does (trim + lowercase) so a stray
+    // capital letter or trailing space can never cause a false "invalid" login.
+    const cleanEmail = email.trim().toLowerCase();
 
     const useMock = await resolveUseMock();
 
@@ -44,7 +47,7 @@ export async function POST(request) {
         });
       }
       // Admins live in mockUsers; students (signups + admin-added) in mockStudents.
-      user = users.find((u) => u.email === email) || mockStudents().find((s) => s.email === email);
+      user = users.find((u) => u.email === cleanEmail) || mockStudents().find((s) => s.email === cleanEmail);
       if (!user) {
         return NextResponse.json(
           { error: "Invalid email or password (Mock Mode)" },
@@ -53,7 +56,7 @@ export async function POST(request) {
       }
     } else {
       // Admins live in the User collection; students in the Student collection.
-      user = (await User.findOne({ email })) || (await Student.findOne({ email }));
+      user = (await User.findOne({ email: cleanEmail })) || (await Student.findOne({ email: cleanEmail }));
       if (!user) {
         return NextResponse.json(
           { error: "Invalid email or password" },
