@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { resolveUseMock, mockUsers, mockStudents } from "@/lib/db";
+import { resolveUseMock, mockUsers, mockStudents, mockAdminUsers } from "@/lib/db";
 import { bcrypt, signToken } from "@/lib/auth";
 import User from "@/models/User";
 import Student from "@/models/Student";
+import AdminUser from "@/models/AdminUser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +24,10 @@ export async function POST(request) {
     const useMock = await resolveUseMock();
 
     let user;
+    // Panel users created under Masters > User live in a separate AdminUser
+    // collection and store a role NAME (not the "admin" enum). When a login
+    // matches one, we treat it as an admin explicitly.
+    let isPanelAdmin = false;
     if (useMock) {
       const users = mockUsers();
       // Seed demo accounts so both portals work immediately in Mock Mode.
@@ -46,8 +51,13 @@ export async function POST(request) {
           role: "admin",
         });
       }
-      // Admins live in mockUsers; students (signups + admin-added) in mockStudents.
-      user = users.find((u) => u.email === cleanEmail) || mockStudents().find((s) => s.email === cleanEmail);
+      // The same email can be a student AND a panel user, so resolve by portal:
+      // admin portal prefers admin/panel accounts; student portal prefers student.
+      const uDoc = users.find((u) => u.email === cleanEmail);
+      const aDoc = mockAdminUsers().find((u) => u.email === cleanEmail || u.username === email.trim());
+      const sDoc = mockStudents().find((s) => s.email === cleanEmail);
+      user = requiredRole === "admin" ? (uDoc || aDoc || sDoc) : (sDoc || uDoc || aDoc);
+      isPanelAdmin = !!aDoc && user === aDoc;
       if (!user) {
         return NextResponse.json(
           { error: "Invalid email or password (Mock Mode)" },
@@ -55,8 +65,17 @@ export async function POST(request) {
         );
       }
     } else {
-      // Admins live in the User collection; students in the Student collection.
-      user = (await User.findOne({ email: cleanEmail })) || (await Student.findOne({ email: cleanEmail }));
+      // The same email can exist as a Student (website) and an AdminUser
+      // (Masters > User panel). Resolve by portal: the admin login prefers an
+      // admin/panel account; the student login prefers the student account.
+      // Panel users may sign in with their email or their username.
+      const [uDoc, aDoc, sDoc] = await Promise.all([
+        User.findOne({ email: cleanEmail }),
+        AdminUser.findOne({ $or: [{ email: cleanEmail }, { username: email.trim() }] }),
+        Student.findOne({ email: cleanEmail }),
+      ]);
+      user = requiredRole === "admin" ? (uDoc || aDoc || sDoc) : (sDoc || uDoc || aDoc);
+      isPanelAdmin = !!aDoc && user === aDoc;
       if (!user) {
         return NextResponse.json(
           { error: "Invalid email or password" },
@@ -73,23 +92,37 @@ export async function POST(request) {
       );
     }
 
+    // Panel users (Masters > User) are admins for login purposes; their stored
+    // `role` is a role NAME, so we grant the "admin" role explicitly here.
+    const effectiveRole = isPanelAdmin ? "admin" : (user.role || "student");
+
+    // A deactivated panel user cannot sign in.
+    if (isPanelAdmin && user.status && user.status !== "Active") {
+      return NextResponse.json(
+        { error: "This account is inactive. Please contact an administrator." },
+        { status: 403 }
+      );
+    }
+
     // Portal role enforcement (server-side). The admin login sends
     // requiredRole="admin", so only admin-role accounts ever receive a token
     // here. A non-admin gets the same generic error (no token, no account
     // enumeration) — students can never obtain admin access.
-    if (requiredRole && (user.role || "student") !== requiredRole) {
+    if (requiredRole && effectiveRole !== requiredRole) {
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 }
       );
     }
 
-    const token = await signToken(user);
+    const token = await signToken(
+      isPanelAdmin ? { _id: user._id, id: user._id, name: user.name, role: "admin" } : user
+    );
     return NextResponse.json({
       message: "Login successful",
       success: true,
       token,
-      user: { name: user.name || "Demo User", role: user.role || "student" },
+      user: { name: user.name || "Demo User", role: effectiveRole },
     });
   } catch (error) {
     console.error("Login error:", error);
