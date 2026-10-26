@@ -92,7 +92,9 @@ export default function StudentAssessmentsPage() {
                               ? <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(16,185,129,0.15)" }}><CheckCircle2 size={14} /> Passed</span>
                               : <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(244,63,94,0.15)" }}>Not passed</span>)
                           : examDone
-                            ? <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(245,158,11,0.15)" }}><Clock size={13} /> Awaiting result</span>
+                            ? (a.interviewEnabled && !a.interviewGraded
+                                ? <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(99,102,241,0.15)" }}><Bot size={14} /> Interview pending</span>
+                                : <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(245,158,11,0.15)" }}><Clock size={13} /> Awaiting result</span>)
                             : <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#db254f] px-3 py-1.5 rounded-full" style={{ background: "rgba(219,37,79,0.1)" }}>{onSetB ? "Attempt 2 · Set B" : "Pending"}</span>}
                     </div>
                   )}
