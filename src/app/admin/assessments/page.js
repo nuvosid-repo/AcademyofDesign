@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Pencil, Trash2, ClipboardCheck, Plus, Check, HelpCircle, FileText, Users, ExternalLink, Award, RefreshCw, X, Image as ImageIcon } from "lucide-react";
+import { Pencil, Trash2, ClipboardCheck, Plus, Check, HelpCircle, FileText, Users, ExternalLink, Award, RefreshCw, X, Image as ImageIcon, UserPlus } from "lucide-react";
 import Link from "next/link";
 import AdminShell from "@/components/portal/AdminShell";
 import { useConfirm } from "@/components/portal/ConfirmDialog";
@@ -250,9 +250,19 @@ export default function AssessmentsPage() {
               <p className="text-xs text-gray-400 mt-1">Everyone enrolled in this course will see the assessment.</p>
             </div>
           ) : (
-            <div className="b2b-note rounded-xl px-4 py-3 flex items-start gap-2.5">
-              <span className="b2b-badge text-[10px] px-1.5 py-0.5 rounded font-semibold mt-0.5 shrink-0">Individual</span>
-              <div className="text-sm leading-relaxed">Create this assessment now. Then go to <b>Students</b> → select the student(s) → <b>Assign Assessment</b> to give it to specific people. It won&apos;t appear for anyone until you assign it there.</div>
+            <div className="b2b-note rounded-xl p-4 flex items-start gap-3.5">
+              <div className="b2b-note-icon shrink-0 w-9 h-9 rounded-lg flex items-center justify-center">
+                <UserPlus size={18} />
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <span className="b2b-note-title font-semibold text-sm">Individual assessment</span>
+                  <span className="b2b-badge text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide">Manual assign</span>
+                </div>
+                <div className="text-[13px] leading-relaxed">
+                  Create it now — then open <b>Students</b>, select the student(s) and click <b>Assign Assessment</b>. It stays hidden from everyone until you assign it there.
+                </div>
+              </div>
             </div>
           )}
 
