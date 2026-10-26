@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { cldUrl } from '@/lib/img';
+import { cldUrl } from '@/lib/cldImage';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Phone, CheckCircle2, Plus, Minus, Tv, ArrowRight, Sparkles } from 'lucide-react';

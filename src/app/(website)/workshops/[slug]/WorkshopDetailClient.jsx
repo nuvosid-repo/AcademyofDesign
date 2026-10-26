@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { cldUrl } from "@/lib/img";
+import { cldUrl } from "@/lib/cldImage";
 import { motion } from "framer-motion";
 import {
   Calendar, MapPin, Clock, ArrowLeft, ArrowRight, PlayCircle,

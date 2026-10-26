@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { cldUrl } from "@/lib/img";
+import { cldUrl } from "@/lib/cldImage";
 import { motion } from "framer-motion";
 import { Calendar, Clock, MapPin, ArrowRight } from "lucide-react";
 import styles from "./Workshops.module.scss";

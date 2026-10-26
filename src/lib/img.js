@@ -1,24 +1,23 @@
-// Client-safe Cloudinary image optimizer (pure string helper — no secrets).
-//
-// Rewrites a Cloudinary delivery URL so Cloudinary serves an auto-selected
-// modern format (WebP / AVIF, per the browser) at automatic quality, and —
-// when a display width is given — caps the pixels so a small thumbnail never
-// downloads a full-size original. Non-Cloudinary values (base64 data URLs,
-// external URLs, local /public paths, empty) are returned unchanged, so it is
-// always safe to wrap any <img src>.
-//
-//   cldUrl(url)                 → f_auto,q_auto
-//   cldUrl(url, { width: 400 }) → f_auto,q_auto,w_400,c_limit
-export function cldUrl(url, opts = {}) {
-  if (typeof url !== "string" || !url.includes("res.cloudinary.com")) return url;
-  const marker = "/image/upload/";
-  const i = url.indexOf(marker);
-  if (i === -1) return url; // not an image delivery URL (e.g. raw/video)
-  const insertAt = i + marker.length;
-  const rest = url.slice(insertAt);
-  if (rest.startsWith("f_auto") || rest.includes("f_auto,")) return url; // already optimized
-  const t = ["f_auto", "q_auto"];
-  if (opts.width) t.push(`w_${opts.width}`, "c_limit");
-  if (opts.height) t.push(`h_${opts.height}`, "c_limit");
-  return url.slice(0, insertAt) + t.join(",") + "/" + rest;
+import sharp from "sharp";
+import { NextResponse } from "next/server";
+
+const CACHE = "public, max-age=86400, immutable";
+
+// Serve an image (stored as a base64 data URL) resized + converted to WebP for
+// fast, light delivery. Falls back to the original bytes if processing fails,
+// and redirects if the stored value is a remote URL instead of a data URL.
+export async function serveImage(src, { width, quality = 78 } = {}) {
+  if (!src) return NextResponse.json({ error: "No image" }, { status: 404 });
+  const m = /^data:([^;]+);base64,(.*)$/s.exec(src);
+  if (!m) return NextResponse.redirect(src); // remote URL
+
+  const input = Buffer.from(m[2], "base64");
+  try {
+    let s = sharp(input).rotate();
+    if (width) s = s.resize({ width, withoutEnlargement: true });
+    const out = await s.webp({ quality }).toBuffer();
+    return new Response(out, { headers: { "Content-Type": "image/webp", "Cache-Control": CACHE } });
+  } catch {
+    return new Response(input, { headers: { "Content-Type": m[1], "Cache-Control": CACHE } });
+  }
 }

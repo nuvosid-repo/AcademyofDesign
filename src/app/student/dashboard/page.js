@@ -18,7 +18,7 @@ import {
 import StudentShell from "@/components/portal/StudentShell";
 import { useSession } from "@/context/SessionContext";
 import { apiFetch } from "@/lib/api";
-import { cldUrl } from "@/lib/img";
+import { cldUrl } from "@/lib/cldImage";
 
 const MONTHS = [
   "January",

@@ -5,7 +5,7 @@ import AdminShell from "@/components/portal/AdminShell";
 import { useConfirm } from "@/components/portal/ConfirmDialog";
 import { DatePicker } from "@/components/portal/DateTimePicker";
 import { apiFetch } from "@/lib/api";
-import { cldUrl } from "@/lib/img";
+import { cldUrl } from "@/lib/cldImage";
 
 const GENDERS = ["Male", "Female", "Other"];
 const QUALIFICATIONS = ["High School", "Diploma", "Bachelor's Degree", "Master's Degree", "PhD", "Other"];

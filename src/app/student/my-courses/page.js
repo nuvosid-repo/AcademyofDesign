@@ -5,7 +5,7 @@ import { BookOpen, Clock, Compass, GraduationCap, ArrowRight, Calendar, MapPin, 
 import StudentShell from "@/components/portal/StudentShell";
 import EnrollButton from "@/components/Payment/EnrollButton";
 import { apiFetch } from "@/lib/api";
-import { cldUrl } from "@/lib/img";
+import { cldUrl } from "@/lib/cldImage";
 
 const priceLabel = (p) => {
   if (!p) return "";

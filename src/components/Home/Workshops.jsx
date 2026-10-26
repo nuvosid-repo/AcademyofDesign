@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/dist/ScrollTrigger";
 import Link from "next/link";
-import { cldUrl } from "@/lib/img";
+import { cldUrl } from "@/lib/cldImage";
 import { Calendar, MapPin, Clock, ArrowRight, ArrowUpRight } from "lucide-react";
 import styles from "./Workshops.module.scss";
 import staticWorkshops from "@/data/workshops.json";

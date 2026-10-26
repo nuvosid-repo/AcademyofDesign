@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Camera, Check, Loader2, User as UserIcon } from "lucide-react";
 import StudentShell from "@/components/portal/StudentShell";
 import { apiFetch } from "@/lib/api";
-import { cldUrl } from "@/lib/img";
+import { cldUrl } from "@/lib/cldImage";
 
 const GENDERS = ["Male", "Female", "Other"];
 

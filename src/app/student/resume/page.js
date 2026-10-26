@@ -9,7 +9,7 @@ import {
 import StudentShell from "@/components/portal/StudentShell";
 import { useSession } from "@/context/SessionContext";
 import { apiFetch } from "@/lib/api";
-import { cldUrl } from "@/lib/img";
+import { cldUrl } from "@/lib/cldImage";
 import ResumePaper from "@/components/resume/ResumePaper";
 import { DISCIPLINES, getDiscipline, allSkills, SECTION_KEYS, SECTION_LABELS, WEAK_OPENERS } from "@/lib/resume/disciplines";
 import {

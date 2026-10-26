@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { cldUrl } from "@/lib/img";
+import { cldUrl } from "@/lib/cldImage";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, ChevronDown, Sun, Moon, Menu, X, User2, ArrowLeft } from "lucide-react";
 import { apiFetch } from "@/lib/api";

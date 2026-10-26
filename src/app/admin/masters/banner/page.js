@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Upload, Trash2, Image as ImageIcon } from "lucide-react";
 import AdminShell from "@/components/portal/AdminShell";
 import { useConfirm } from "@/components/portal/ConfirmDialog";
-import { cldUrl } from "@/lib/img";
+import { cldUrl } from "@/lib/cldImage";
 import { apiFetch } from "@/lib/api";
 
 export default function BannerPage() {

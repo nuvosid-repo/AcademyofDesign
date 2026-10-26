@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Pencil, Trash2, Presentation, Plus, User, CalendarClock, ListChecks } from "lucide-react";
 import AdminShell from "@/components/portal/AdminShell";
 import { useConfirm } from "@/components/portal/ConfirmDialog";
-import { cldUrl } from "@/lib/img";
+import { cldUrl } from "@/lib/cldImage";
 import { DatePicker, TimePicker } from "@/components/portal/DateTimePicker";
 import { apiFetch } from "@/lib/api";
 

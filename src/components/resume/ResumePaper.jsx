@@ -2,7 +2,7 @@
 // print export, so "what you see = what you get". The paper is always light
 // (never themed), with four ATS-friendly templates. Pure render, no hooks.
 import { SECTION_KEYS, SECTION_LABELS } from "@/lib/resume/disciplines";
-import { cldUrl } from "@/lib/img";
+import { cldUrl } from "@/lib/cldImage";
 
 const MONTHS = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function fmtMonth(ym) {
