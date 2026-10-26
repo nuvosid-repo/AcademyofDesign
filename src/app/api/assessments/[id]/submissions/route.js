@@ -91,3 +91,26 @@ export async function GET(request, { params }) {
     students,
   });
 }
+
+// DELETE /api/assessments/:id/submissions?studentId=X — admin: reset one
+// student's attempt (removes their result) so they can retake the exam.
+export async function DELETE(request, { params }) {
+  const auth = await getAuthUser(request);
+  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (auth.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { id } = await params;
+  const { searchParams } = new URL(request.url);
+  const studentId = (searchParams.get("studentId") || "").trim();
+  if (!studentId) return NextResponse.json({ error: "studentId is required" }, { status: 400 });
+
+  const useMock = await resolveUseMock();
+  if (useMock) {
+    const store = mockAssessmentResults();
+    for (let i = store.length - 1; i >= 0; i--) {
+      if (store[i].assessmentId === id && store[i].studentId === studentId) store.splice(i, 1);
+    }
+    return NextResponse.json({ success: true });
+  }
+  await AssessmentResult.deleteMany({ assessmentId: id, studentId });
+  return NextResponse.json({ success: true });
+}

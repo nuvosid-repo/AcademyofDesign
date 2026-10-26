@@ -3,9 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, FileText, Users, Save, Sparkles, Loader2, Video, Bot, X, Eye,
-  Search, HelpCircle, Award, CheckCircle2, Clock, ShieldAlert,
+  Search, HelpCircle, Award, CheckCircle2, Clock, ShieldAlert, RefreshCw,
 } from "lucide-react";
 import AdminShell from "@/components/portal/AdminShell";
+import { useConfirm } from "@/components/portal/ConfirmDialog";
 import { apiFetch } from "@/lib/api";
 
 export default function ScoreAssessmentPage() {
@@ -20,7 +21,26 @@ export default function ScoreAssessmentPage() {
   const [savingW, setSavingW] = useState(false);
   const [savingI, setSavingI] = useState(false);
   const [aiGrading, setAiGrading] = useState(false);
+  const [resetting, setResetting] = useState("");
   const [msg, setMsg] = useState("");
+  const confirm = useConfirm();
+
+  // Admin "Retry": remove a student's result so they can retake the exam fresh.
+  const resetAttempt = async (st) => {
+    const ok = await confirm({
+      title: "Reset this attempt?",
+      text: `${st.name || "This student"}'s result for this assessment will be removed so they can retake the exam from the start. This cannot be undone.`,
+      confirmText: "Yes, allow retry",
+      tone: "danger",
+    });
+    if (!ok) return;
+    setResetting(st.studentId);
+    try {
+      const res = await apiFetch(`/api/assessments/${aid}/submissions?studentId=${encodeURIComponent(st.studentId)}`, { method: "DELETE" });
+      if (res.ok) { setMsg(`${st.name || "Student"}'s attempt was reset — they can retake it now.`); loadSubs(aid); }
+      else { const d = await res.json().catch(() => ({})); setMsg(d.error || "Could not reset the attempt."); }
+    } finally { setResetting(""); }
+  };
 
   useEffect(() => {
     apiFetch("/api/assessments", { cache: "no-store" })
@@ -184,8 +204,15 @@ export default function ScoreAssessmentPage() {
                     <td className="py-3 px-4">{A.writtenEnabled ? writtenCell(st) : <span className="text-gray-300">—</span>}</td>
                     <td className="py-3 px-4">{A.interviewEnabled ? interviewCell(st) : <span className="text-gray-300">—</span>}</td>
                     <td className="py-3 px-4">{overallCell(st)}</td>
-                    <td className="py-3 px-4 text-right">
-                      <button onClick={() => openView(st)} className="inline-flex items-center gap-1.5 btn-pill bg-[#db254f] hover:bg-[#b91d40] text-white text-xs font-semibold px-3.5 py-2 transition"><Eye size={14} /> View</button>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => openView(st)} className="inline-flex items-center gap-1.5 btn-pill bg-[#db254f] hover:bg-[#b91d40] text-white text-xs font-semibold px-3.5 py-2 transition"><Eye size={14} /> View</button>
+                        {(st.mcqDone || st.writtenSubmitted || st.interviewGraded || st.autoSubmittedForTabSwitch) && (
+                          <button onClick={() => resetAttempt(st)} disabled={resetting === st.studentId} className="inline-flex items-center gap-1.5 btn-pill border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 text-xs font-semibold px-3.5 py-2 transition disabled:opacity-60" title="Reset this student's attempt so they can retake the exam">
+                            <RefreshCw size={14} /> {resetting === st.studentId ? "Resetting…" : "Retry"}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
