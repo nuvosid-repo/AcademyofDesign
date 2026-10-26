@@ -164,7 +164,12 @@ export default function ExamPage() {
       if (blob && blob.size) videoUrl = await uploadBlob(blob, { folder: "nuvosid/exams", resourceType: "video", filename: "exam.webm" });
       await apiFetch(`/api/student/assessments/${id}/proctor`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ videoUrl, flags: proctorFlagsRef.current }),
+        body: JSON.stringify({
+          videoUrl,
+          flags: proctorFlagsRef.current,
+          tabSwitches: warnRef.current,
+          autoSubmittedForTabSwitch: endedRef.current, // true only when 3 tab switches ended the exam
+        }),
       });
     } catch { /* never block exam submission on a proctoring upload issue */ }
   };
@@ -304,6 +309,12 @@ export default function ExamPage() {
         <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-500" style={{ background: "rgba(16,185,129,0.15)" }}><CheckCircle2 size={30} /></div>
         <h2 className="text-2xl font-extrabold">Exam submitted 🎉</h2>
         <p className="pf-muted mt-2 text-sm">Your responses have been recorded.</p>
+        {warnings >= MAX_TAB_WARNINGS && (
+          <div className="mt-4 rounded-xl px-4 py-3 text-sm text-left flex items-start gap-2.5" style={{ background: "rgba(244,63,94,0.12)", border: "1px solid rgba(244,63,94,0.30)" }}>
+            <ShieldAlert size={17} className="text-rose-500 shrink-0 mt-0.5" />
+            <span className="pf-muted">Your exam was <b style={{ color: "var(--fg)" }}>submitted automatically</b> because you left the exam tab {warnings} times. This has been recorded and shared with the admin.</span>
+          </div>
+        )}
         <div className="grid gap-3 mt-6 text-left">
           {assessment.mcqEnabled && mcqResult && (
             <div className="rounded-xl border pf-border p-4 flex items-center justify-between">

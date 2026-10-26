@@ -13,7 +13,7 @@ export async function POST(request, { params }) {
   const auth = await getAuthUser(request);
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  const { videoUrl, flags } = await request.json().catch(() => ({}));
+  const { videoUrl, flags, tabSwitches, autoSubmittedForTabSwitch } = await request.json().catch(() => ({}));
 
   const cleanFlags = (Array.isArray(flags) ? flags : [])
     .slice(0, 500)
@@ -23,7 +23,11 @@ export async function POST(request, { params }) {
   const set = { updatedAt: new Date() };
   if (typeof videoUrl === "string" && videoUrl) set.examVideoUrl = videoUrl;
   if (cleanFlags.length) set.proctorFlags = cleanFlags;
-  if (!set.examVideoUrl && !set.proctorFlags) return NextResponse.json({ success: true, skipped: true });
+  if (Number.isFinite(Number(tabSwitches))) set.tabSwitches = Math.max(0, Math.min(999, Math.round(Number(tabSwitches))));
+  if (typeof autoSubmittedForTabSwitch === "boolean") set.autoSubmittedForTabSwitch = autoSubmittedForTabSwitch;
+  if (!set.examVideoUrl && !set.proctorFlags && set.tabSwitches == null && set.autoSubmittedForTabSwitch == null) {
+    return NextResponse.json({ success: true, skipped: true });
+  }
 
   const useMock = await resolveUseMock();
   if (useMock) {

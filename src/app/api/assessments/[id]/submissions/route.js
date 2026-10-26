@@ -73,6 +73,8 @@ export async function GET(request, { params }) {
       writtenBreakdown: r.writtenBreakdown || [],
       examVideoUrl: r.examVideoUrl || "",
       proctorFlags: r.proctorFlags || [],
+      tabSwitches: r.tabSwitches || 0,
+      autoSubmittedForTabSwitch: !!r.autoSubmittedForTabSwitch,
       interviewGraded: !!r.interviewGraded, interviewScore: r.interviewScore || 0, interviewTotal: r.interviewTotal || 0,
       interviewBreakdown: r.interviewBreakdown || [],
       interviewVideoUrl: r.interviewVideoUrl || "",

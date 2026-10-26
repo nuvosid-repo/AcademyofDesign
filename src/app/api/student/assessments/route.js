@@ -67,6 +67,7 @@ export async function GET(request) {
         passingScore: s.passingScore,
         mcqDone: !!r.mcqDone,
         mcqScore: r.mcqScore || 0, mcqTotal: r.mcqTotal || 0, mcqPercentage: r.mcqPercentage || 0,
+        autoSubmittedForTabSwitch: !!r.autoSubmittedForTabSwitch, tabSwitches: r.tabSwitches || 0,
         // Written (from the active set)
         writtenEnabled: s.writtenEnabled,
         writtenQuestions: (setQ.writtenQuestions || []).map((q) => ({ question: q.question || "", maxMarks: q.maxMarks || 0, media: q.media || "" })),

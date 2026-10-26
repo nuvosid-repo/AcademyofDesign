@@ -46,6 +46,8 @@ const AssessmentResultSchema = new mongoose.Schema({
   // ── Exam proctoring (camera / head + eye tracking during the MCQ+written exam) ──
   examVideoUrl: { type: String, default: "" }, // Cloudinary URL of the recorded exam session
   proctorFlags: { type: [{ type: { type: String, default: "" }, at: { type: Number, default: 0 } }], default: [] }, // violations: { type, at(seconds) }
+  tabSwitches: { type: Number, default: 0 }, // how many times the student left the exam tab
+  autoSubmittedForTabSwitch: { type: Boolean, default: false }, // exam was force-submitted after too many tab switches
 
   // ── Written / return exam ──
   writtenAnswers: { type: [AnswerSchema], default: [] }, // student submission

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, FileText, Users, Save, Sparkles, Loader2, Video, Bot, X, Eye,
-  Search, HelpCircle, Award, CheckCircle2, Clock,
+  Search, HelpCircle, Award, CheckCircle2, Clock, ShieldAlert,
 } from "lucide-react";
 import AdminShell from "@/components/portal/AdminShell";
 import { apiFetch } from "@/lib/api";
@@ -226,6 +226,16 @@ export default function ScoreAssessmentPage() {
               {(A.mcqEnabled || A.writtenEnabled) && (
                 <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
                   <h4 className="font-bold text-gray-900 flex items-center gap-2 mb-3"><Video size={16} className="text-[#db254f]" /> Exam Proctoring</h4>
+                  {sel.autoSubmittedForTabSwitch ? (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 mb-3 flex items-start gap-2 text-sm">
+                      <ShieldAlert size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                      <span className="text-rose-700"><b>Exam auto-submitted (cancelled):</b> this student left the exam tab {sel.tabSwitches || 3} times, so the exam was ended and submitted automatically.</span>
+                    </div>
+                  ) : sel.tabSwitches > 0 ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2 mb-3 text-xs text-amber-700 flex items-center gap-2">
+                      <ShieldAlert size={14} className="shrink-0" /> Left the exam tab {sel.tabSwitches} time{sel.tabSwitches === 1 ? "" : "s"} during this exam.
+                    </div>
+                  ) : null}
                   {sel.examVideoUrl
                     ? <video src={sel.examVideoUrl} controls className="w-full rounded-xl border border-gray-200 bg-black max-h-[340px]" />
                     : <p className="text-xs text-gray-400 bg-white border border-gray-200 rounded-lg px-3 py-2.5">No exam recording {(sel.mcqDone || sel.writtenSubmitted) ? "was captured for this attempt." : "yet — the exam hasn't been taken."}</p>}

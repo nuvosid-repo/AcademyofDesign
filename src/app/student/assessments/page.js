@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ClipboardCheck, HelpCircle, FileText, Users, Calendar, ExternalLink,
-  CheckCircle2, Clock, ArrowRight, Lock, RefreshCw, Award, Bot,
+  CheckCircle2, Clock, ArrowRight, Lock, RefreshCw, Award, Bot, ShieldAlert,
 } from "lucide-react";
 import StudentShell from "@/components/portal/StudentShell";
 import { apiFetch } from "@/lib/api";
@@ -97,6 +97,12 @@ export default function StudentAssessmentsPage() {
                   <p className="text-xs text-[#db254f] font-semibold uppercase tracking-wide">{a.course}</p>
                   <h3 className="font-bold text-lg mt-0.5">{a.title}</h3>
                   {a.description && <p className="pf-muted text-sm mt-1.5 text-justify">{a.description}</p>}
+                  {a.autoSubmittedForTabSwitch && (
+                    <div className="mt-2.5 rounded-lg px-3 py-2 text-xs flex items-start gap-2 clear-both" style={{ background: "rgba(244,63,94,0.12)", border: "1px solid rgba(244,63,94,0.28)" }}>
+                      <ShieldAlert size={14} className="text-rose-500 shrink-0 mt-0.5" />
+                      <span className="pf-muted">Your exam was submitted automatically because you left the exam tab {a.tabSwitches || 3} times.</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Section chips */}
