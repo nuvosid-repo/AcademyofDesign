@@ -144,7 +144,21 @@ export default function ManageStudentsPage() {
   const onFile = (key, setName, ref) => (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 3 * 1024 * 1024) { setError("File must be under 3MB"); return; }
+    const isImage = key === "image";
+    // Avatar images are capped small (they go to Cloudinary); documents (ID
+    // proof) may be larger, e.g. a scanned PDF.
+    const maxKB = isImage ? 500 : 3 * 1024;
+    if (isImage && file.type && !file.type.startsWith("image/")) {
+      setError("Please choose an image file (JPG, PNG, …).");
+      if (ref?.current) ref.current.value = "";
+      return;
+    }
+    if (file.size > maxKB * 1024) {
+      setError(`${isImage ? "Image must be under 500 KB" : "File must be under 3 MB"}. Please choose a smaller file.`);
+      if (ref?.current) ref.current.value = "";
+      return;
+    }
+    setError("");
     setName(file.name);
     const reader = new FileReader();
     reader.onload = () => set(key, reader.result);
@@ -218,13 +232,16 @@ export default function ManageStudentsPage() {
   const field = "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm outline-none focus:border-[#db254f] focus:bg-white transition";
   const label = "block text-sm text-gray-600 mb-1.5";
   const Req = () => <span className="text-rose-500"> *</span>;
-  const FileField = ({ name, onChange, inputRef }) => (
+  const FileField = ({ name, onChange, inputRef, accept, hint }) => (
+    <div>
     <div className="flex items-center rounded-xl border border-gray-200 overflow-hidden">
       <label className="shrink-0 inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 px-3 py-2.5 text-sm text-gray-700 cursor-pointer border-r border-gray-200">
         <Upload size={15} /> Choose file
-        <input ref={inputRef} type="file" onChange={onChange} className="hidden" />
+        <input ref={inputRef} type="file" accept={accept} onChange={onChange} className="hidden" />
       </label>
       <span className="px-3 text-xs text-gray-400 truncate">{name || "No file chosen"}</span>
+    </div>
+    {hint && <p className="text-[11px] text-gray-400 mt-1">{hint}</p>}
     </div>
   );
 
