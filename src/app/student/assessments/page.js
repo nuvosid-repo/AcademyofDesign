@@ -83,7 +83,9 @@ export default function StudentAssessmentsPage() {
                 <div>
                   {examEnabled && (
                     <div className="float-right ml-4 mb-1">
-                      {a.canRetry
+                      {a.autoSubmittedForTabSwitch
+                        ? <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(244,63,94,0.15)" }}><ShieldAlert size={13} /> Cancelled</span>
+                        : a.canRetry
                         ? <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-500 px-3 py-1.5 rounded-full" style={{ background: "rgba(245,158,11,0.15)" }}><RefreshCw size={13} /> Failed · retry</span>
                         : a.combinedReady
                           ? (a.combinedPassed
@@ -137,6 +139,10 @@ export default function StudentAssessmentsPage() {
 
                   {/* Right: primary action */}
                   <div className="flex items-center gap-2">
+                    {a.autoSubmittedForTabSwitch ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 px-3 py-2 rounded-full" style={{ background: "rgba(244,63,94,0.12)" }}><ShieldAlert size={13} /> Exam cancelled — contact admin</span>
+                    ) : (
+                    <>
                     {a.canRetry ? (
                       <button onClick={() => retry(a.id)} disabled={retrying === a.id} className="btn-pill inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold px-5 py-2.5 shadow-md shadow-amber-500/30 transition disabled:opacity-60">
                         <RefreshCw size={15} /> {retrying === a.id ? "Starting…" : "Retry with Set B"}
@@ -156,6 +162,8 @@ export default function StudentAssessmentsPage() {
                           <Bot size={15} /> Start AI Interview
                         </Link>
                       )
+                    )}
+                    </>
                     )}
                   </div>
                 </div>
