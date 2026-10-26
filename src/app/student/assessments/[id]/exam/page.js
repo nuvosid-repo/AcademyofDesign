@@ -78,13 +78,17 @@ export default function ExamPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inExam]);
 
-  /* ── Anti-cheat: one warning per tab switch; auto-submit after MAX ──
-     blur + visibilitychange both fire on a single tab switch, so we count only
-     the first "leave" and reset when the student returns — no double counting. */
+  /* ── Anti-cheat: one warning per real tab switch; auto-submit after MAX ──
+     We count ONLY `visibilitychange → hidden` (the reliable "tab is actually
+     backgrounded" signal). The window `blur` event is intentionally NOT counted
+     because it also fires for the address bar, file/permission dialogs, the
+     camera prompt and clicking another app — which would wrongly inflate the
+     count and end the exam early. awayRef dedupes so one switch = one warning. */
   useEffect(() => {
     if (!inExam) return;
-    const leave = () => {
-      if (awayRef.current || endedRef.current) return; // already counted / exam ending
+    const onVis = () => {
+      if (!document.hidden) { awayRef.current = false; return; } // returned to the tab
+      if (awayRef.current || endedRef.current) return;           // already counted / ending
       awayRef.current = true;
       const n = warnRef.current + 1;
       warnRef.current = n;
@@ -95,16 +99,8 @@ export default function ExamPage() {
         endFnRef.current?.(); // auto-submit the exam
       }
     };
-    const back = () => { awayRef.current = false; };
-    const onVis = () => (document.hidden ? leave() : back());
-    window.addEventListener("blur", leave);
-    window.addEventListener("focus", back);
     document.addEventListener("visibilitychange", onVis);
-    return () => {
-      window.removeEventListener("blur", leave);
-      window.removeEventListener("focus", back);
-      document.removeEventListener("visibilitychange", onVis);
-    };
+    return () => document.removeEventListener("visibilitychange", onVis);
   }, [inExam]);
 
   /* ── Warn before closing/reloading during the exam ── */
