@@ -279,7 +279,7 @@ export default function ManageStudentsPage() {
             </div>
             <div>
               <label className={label}>Image</label>
-              <FileField name={imgName} onChange={onFile("image", setImgName, imgRef)} inputRef={imgRef} />
+              <FileField name={imgName} onChange={onFile("image", setImgName, imgRef)} inputRef={imgRef} accept="image/*" hint="JPG / PNG, max 500 KB" />
             </div>
             <div>
               <label className={label}>Contact Number</label>
