@@ -315,6 +315,12 @@ export default function ManageStudentsPage() {
                 <input type={showCpw ? "text" : "password"} className={`${field} pr-11`} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
                 <button type="button" onClick={() => setShowCpw((s) => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700">{showCpw ? <EyeOff size={17} /> : <Eye size={17} />}</button>
               </div>
+              {form.password && confirmPassword && form.password !== confirmPassword && (
+                <p className="text-xs text-rose-500 mt-1">Passwords do not match</p>
+              )}
+              {editingId && form.password && confirmPassword && form.password === confirmPassword && (
+                <p className="text-xs text-emerald-500 mt-1">Password will be updated on save</p>
+              )}
             </div>
             <div>
               <label className={label}>Status<Req /></label>
