@@ -250,9 +250,9 @@ export default function AssessmentsPage() {
               <p className="text-xs text-gray-400 mt-1">Everyone enrolled in this course will see the assessment.</p>
             </div>
           ) : (
-            <div className="rounded-xl px-4 py-3 flex items-start gap-2.5" style={{ background: "#4338ca", border: "1px solid #6366f1" }}>
-              <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold mt-0.5 shrink-0" style={{ background: "#ffffff", color: "#4338ca" }}>Individual</span>
-              <div className="text-sm leading-relaxed" style={{ color: "#ffffff" }}>Create this assessment now. Then go to <b>Students</b> → select the student(s) → <b>Assign Assessment</b> to give it to specific people. It won&apos;t appear for anyone until you assign it there.</div>
+            <div className="b2b-note rounded-xl px-4 py-3 flex items-start gap-2.5">
+              <span className="b2b-badge text-[10px] px-1.5 py-0.5 rounded font-semibold mt-0.5 shrink-0">Individual</span>
+              <div className="text-sm leading-relaxed">Create this assessment now. Then go to <b>Students</b> → select the student(s) → <b>Assign Assessment</b> to give it to specific people. It won&apos;t appear for anyone until you assign it there.</div>
             </div>
           )}
 
