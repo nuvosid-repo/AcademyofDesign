@@ -15,10 +15,15 @@ const FIELDS = [
 ];
 
 function serialize(s) {
+  // Never ship a heavy inline base64 avatar in the list/create response — a
+  // single one can be megabytes and bloats the whole payload. URL (Cloudinary)
+  // avatars are tiny and kept; a legacy base64 avatar still loads on view/edit
+  // via GET /:id. The table shows a placeholder for those until they migrate.
+  const image = typeof s.image === "string" && s.image.startsWith("data:") ? "" : (s.image || "");
   return {
     id: (s._id && s._id.toString()) || s.id,
     name: s.name, email: s.email, dateOfBirth: s.dateOfBirth || "", gender: s.gender || "",
-    image: s.image || "", contactNumber: s.contactNumber || "", qualification: s.qualification || "",
+    image, contactNumber: s.contactNumber || "", qualification: s.qualification || "",
     institutionName: s.institutionName || "", country: s.country || "", address: s.address || "",
     identityProof: s.identityProof || "", subscriptionType: s.subscriptionType || "B2C",
     status: s.status || "Active", createdAt: s.createdAt,
@@ -50,8 +55,12 @@ export async function GET(request) {
 
   // Exclude the heavy identityProof base64 from the list — it loads on view/edit
   // via GET /:id. (Avatar `image` stays so the table thumbnails still show.)
-  const docs = await Student.find().select("-identityProof -password").sort({ createdAt: -1 }).lean();
-  const enr = await Enrollment.find().select("studentId studentEmail courseTitle").lean();
+  // Run both reads in parallel; the list never needs identityProof/password,
+  // and base64 avatars are stripped in serialize() so the payload stays small.
+  const [docs, enr] = await Promise.all([
+    Student.find().select("-identityProof -password").sort({ createdAt: -1 }).lean(),
+    Enrollment.find().select("studentId studentEmail courseTitle").lean(),
+  ]);
   return NextResponse.json({ students: attachEnrollments(docs.map(serialize), enr) });
 }
 
