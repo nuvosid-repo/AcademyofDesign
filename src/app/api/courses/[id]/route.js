@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { resolveUseMock, mockCourses } from "@/lib/db";
+import { resolveUseMock, mockCourses, mockAssessments, mockAssessmentResults } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { offloadMedia } from "@/lib/cloudinary";
 import Course from "@/models/Course";
+import Assessment from "@/models/Assessment";
+import AssessmentResult from "@/models/AssessmentResult";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,10 +71,31 @@ export async function DELETE(request, { params }) {
     const store = mockCourses();
     const idx = store.findIndex((c) => c._id === id);
     if (idx === -1) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    store.splice(idx, 1);
+    const [removed] = store.splice(idx, 1);
+    // Cascade: drop this course's assessments + their results so nothing is
+    // left orphaned (assessments reference the course by title).
+    const title = removed?.title;
+    if (title) {
+      const aStore = mockAssessments();
+      const deadIds = new Set(aStore.filter((a) => a.course === title).map((a) => (a._id || a.id)?.toString()));
+      for (let i = aStore.length - 1; i >= 0; i--) if (aStore[i].course === title) aStore.splice(i, 1);
+      const rStore = mockAssessmentResults();
+      for (let i = rStore.length - 1; i >= 0; i--) if (deadIds.has(String(rStore[i].assessmentId)) || rStore[i].course === title) rStore.splice(i, 1);
+    }
     return NextResponse.json({ success: true });
   }
 
+  // Load the course first so we know its title, then cascade-delete everything
+  // that references it — otherwise its assessments would be orphaned (they link
+  // to the course by title) and keep showing up in the admin lists.
+  const course = await Course.findById(id);
+  const title = course?.title;
   await Course.findByIdAndDelete(id);
+  if (title) {
+    const assessments = await Assessment.find({ course: title }).select("_id").lean();
+    const ids = assessments.map((a) => a._id.toString());
+    await AssessmentResult.deleteMany({ $or: [{ assessmentId: { $in: ids } }, { course: title }] });
+    await Assessment.deleteMany({ course: title });
+  }
   return NextResponse.json({ success: true });
 }
