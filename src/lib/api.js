@@ -6,8 +6,46 @@
 //   /admin/*   → admin token
 //   everything else (website + /student/*) → student token
 
+import { emitToast } from "@/lib/toastBus";
+
 export const API_BASE =
   (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL) || "";
+
+// Methods that change data → worth a toast. Utility/auth endpoints are skipped
+// (signing, parsing, login/logout/signup have their own flows / redirects).
+const MUTATIONS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const TOAST_SKIP = /\/(login|logout|signup)\b|\/cloudinary\/sign|\/interview\/sign|\/resume\/parse/;
+
+// Show an automatic success/error toast for admin save/update/delete calls.
+// Runs only on /admin pages, only for mutating methods, and never throws.
+// Callers can opt out with { toast: false } or override with { toastMessage }.
+function autoToast(path, options, reqPromise) {
+  try {
+    if (typeof window === "undefined") return;
+    if (options.toast === false) return;
+    const method = (options.method || "GET").toUpperCase();
+    if (!MUTATIONS.has(method)) return;
+    if (!window.location.pathname.startsWith("/admin")) return;
+    if (TOAST_SKIP.test(path)) return;
+
+    reqPromise
+      .then(async (res) => {
+        let body = {};
+        try { body = await res.clone().json(); } catch { /* non-JSON response */ }
+        if (res.ok) {
+          const msg =
+            options.toastMessage ||
+            (method === "DELETE" ? "Deleted successfully"
+              : method === "POST" ? "Saved successfully"
+              : "Updated successfully");
+          emitToast({ type: "success", message: msg });
+        } else {
+          emitToast({ type: "error", message: body.error || body.message || "Action failed. Please try again." });
+        }
+      })
+      .catch(() => emitToast({ type: "error", message: "Network error. Please try again." }));
+  } catch { /* toasting must never break a request */ }
+}
 
 const AUTH_EVENT = "nuvosid-auth-changed";
 // Same name is used for the localStorage key and the cookie (different stores).
@@ -76,5 +114,7 @@ export function apiFetch(path, options = {}) {
     url = query ? `${normalized}?${query}` : normalized;
   }
 
-  return fetch(url, { ...options, headers });
+  const req = fetch(url, { ...options, headers });
+  autoToast(path, options, req);
+  return req;
 }
