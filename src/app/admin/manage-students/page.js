@@ -5,6 +5,7 @@ import AdminShell from "@/components/portal/AdminShell";
 import { useConfirm } from "@/components/portal/ConfirmDialog";
 import { DatePicker } from "@/components/portal/DateTimePicker";
 import { apiFetch } from "@/lib/api";
+import { cldUrl } from "@/lib/img";
 
 const GENDERS = ["Male", "Female", "Other"];
 const QUALIFICATIONS = ["High School", "Diploma", "Bachelor's Degree", "Master's Degree", "PhD", "Other"];
@@ -410,7 +411,7 @@ export default function ManageStudentsPage() {
                     <td className="py-3 px-4"><input type="checkbox" className="accent-[#db254f]" checked={selected.has(s.id)} onChange={() => toggleSel(s.id)} /></td>
                     <td className="py-3 px-4 text-gray-700">{i + 1}</td>
                     <td className="py-3 px-4">
-                      {s.image ? <img src={s.image} alt={s.name} className="w-9 h-9 rounded-full object-cover" /> : <span className="w-9 h-9 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-xs">{s.name?.charAt(0)?.toUpperCase() || "S"}</span>}
+                      {s.image ? <img src={cldUrl(s.image, { width: 80 })} alt={s.name} loading="lazy" decoding="async" className="w-9 h-9 rounded-full object-cover" /> : <span className="w-9 h-9 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-xs">{s.name?.charAt(0)?.toUpperCase() || "S"}</span>}
                     </td>
                     <td className="py-3 px-4 font-medium text-gray-900">{s.name}</td>
                     <td className="py-3 px-4 text-gray-500">{s.email}</td>
@@ -455,7 +456,7 @@ export default function ManageStudentsPage() {
             <div className="p-6 space-y-6">
               <div className="flex items-center gap-4">
                 {viewing.image
-                  ? <img src={viewing.image} alt={viewing.name} className="w-16 h-16 rounded-full object-cover" />
+                  ? <img src={cldUrl(viewing.image, { width: 160 })} alt={viewing.name} loading="lazy" decoding="async" className="w-16 h-16 rounded-full object-cover" />
                   : <span className="w-16 h-16 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-xl">{viewing.name?.charAt(0)?.toUpperCase() || "S"}</span>}
                 <div>
                   <div className="font-bold text-gray-900 text-lg">{viewing.name}</div>

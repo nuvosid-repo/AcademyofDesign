@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { cldUrl } from "@/lib/img";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, ChevronDown, Sun, Moon, Menu, X, User2, ArrowLeft } from "lucide-react";
 import { apiFetch } from "@/lib/api";
@@ -162,7 +163,7 @@ export default function PortalShell({ brand, subtitle, nav, loginPath, children 
                 className={`flex items-center gap-2.5 rounded-full pl-1 pr-1.5 sm:pr-2.5 py-1 border transition ${menuOpen ? "pf-nav-active" : "pf-card"}`}
               >
                 {avatar ? (
-                  <img src={avatar} alt={user?.name || "Profile"} className="w-9 h-9 rounded-full object-cover shrink-0" />
+                  <img src={cldUrl(avatar, { width: 80 })} alt={user?.name || "Profile"} loading="lazy" decoding="async" className="w-9 h-9 rounded-full object-cover shrink-0" />
                 ) : (
                   <span className="w-9 h-9 rounded-full bg-gradient-to-br from-[#db254f] to-[#e56b85] flex items-center justify-center text-sm font-bold text-white shadow-sm shadow-rose-500/30 shrink-0">
                     {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
@@ -179,7 +180,7 @@ export default function PortalShell({ brand, subtitle, nav, loginPath, children 
                 <div className="absolute right-0 mt-2 w-60 pf-card overflow-hidden z-40 p-0">
                   <div className="flex items-center gap-3 px-4 py-3.5 border-b pf-border" style={{ background: "linear-gradient(90deg, rgba(219,37,79,0.10), transparent)" }}>
                     {avatar ? (
-                      <img src={avatar} alt={user?.name || "Profile"} className="w-10 h-10 rounded-full object-cover shrink-0" />
+                      <img src={cldUrl(avatar, { width: 80 })} alt={user?.name || "Profile"} loading="lazy" decoding="async" className="w-10 h-10 rounded-full object-cover shrink-0" />
                     ) : (
                       <span className="w-10 h-10 rounded-full bg-gradient-to-br from-[#db254f] to-[#e56b85] flex items-center justify-center font-bold text-white shrink-0">
                         {user?.name ? user.name.charAt(0).toUpperCase() : "U"}

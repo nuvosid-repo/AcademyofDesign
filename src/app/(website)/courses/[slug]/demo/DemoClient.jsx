@@ -1,6 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
+import { cldUrl } from '@/lib/img';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
@@ -451,7 +452,7 @@ export default function DemoClassPage() {
                 {course.instructors && course.instructors.map((ins, idx) => (
                   <div key={idx} className={styles.instructorItem}>
                     <div className={styles.imgWrap}>
-                      <img src={ins.image} alt={ins.name} />
+                      <img src={cldUrl(ins.image, { width: 200 })} alt={ins.name} loading="lazy" decoding="async" />
                     </div>
                     <div className={styles.name}>{ins.name}</div>
                     <div className={styles.designation}>{ins.designation || 'Industry Expert'}</div>

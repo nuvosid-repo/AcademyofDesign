@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/dist/ScrollTrigger";
 import Link from "next/link";
+import { cldUrl } from "@/lib/img";
 import { Calendar, MapPin, Clock, ArrowRight, ArrowUpRight } from "lucide-react";
 import styles from "./Workshops.module.scss";
 import staticWorkshops from "@/data/workshops.json";
@@ -70,7 +71,7 @@ export default function Workshops() {
               className={styles.workshopCard}
             >
               <div className={styles.imageWrapper}>
-                <img src={workshop.image} alt={workshop.title} />
+                <img src={cldUrl(workshop.image, { width: 500 })} alt={workshop.title} loading="lazy" decoding="async" />
                 <div className={styles.overlay} />
                 <span className={styles.categoryTag}>{workshop.category}</span>
               </div>

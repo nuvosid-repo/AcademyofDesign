@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { cldUrl } from "@/lib/img";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowRight, Award, GraduationCap, BadgeCheck, Briefcase,
@@ -88,7 +89,7 @@ export default function MentorDetailClient() {
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className={styles.heroPortrait}
             >
-              <img src={mentor.image} alt={mentor.name} />
+              <img src={cldUrl(mentor.image, { width: 400 })} alt={mentor.name} loading="lazy" decoding="async" />
               {mentor.experience && (
                 <span className={styles.heroPortraitExp}>
                   <Briefcase size={13} /> {mentor.experience}
@@ -317,7 +318,7 @@ export default function MentorDetailClient() {
                     <Link key={course.id} href={`/courses/${course.id}`} className={styles.courseCard}>
                       <div className={styles.courseCardImg}>
                         {full.image ? (
-                          <img src={full.image} alt={title} />
+                          <img src={cldUrl(full.image, { width: 300 })} alt={title} loading="lazy" decoding="async" />
                         ) : (
                           <span className={styles.courseCardFallback}><Award size={26} /></span>
                         )}

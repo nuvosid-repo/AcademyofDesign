@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { cldUrl } from "@/lib/img";
 import { motion } from "framer-motion";
 import { Calendar, Clock, MapPin, ArrowRight } from "lucide-react";
 import styles from "./Workshops.module.scss";
@@ -41,7 +42,7 @@ export default function WorkshopsGrid() {
               >
                 <Link href={`/workshops/${w.id}`} className={styles.workshopCard}>
                   <div className={styles.cardImage}>
-                    <img src={w.image} alt={w.title} />
+                    <img src={cldUrl(w.image, { width: 500 })} alt={w.title} loading="lazy" decoding="async" />
                     <span className={styles.cardCat}>{w.category}</span>
                     <div className={styles.cardPrice}>
                       <span className={styles.current}>{w.price}</span>

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Camera, Check, Loader2, User as UserIcon } from "lucide-react";
 import StudentShell from "@/components/portal/StudentShell";
 import { apiFetch } from "@/lib/api";
+import { cldUrl } from "@/lib/img";
 
 const GENDERS = ["Male", "Female", "Other"];
 
@@ -99,7 +100,7 @@ export default function StudentProfilePage() {
         <div className="pf-card p-6 flex flex-col items-center text-center lg:sticky lg:top-4">
           <AvatarRing pct={pct}>
             {form.image ? (
-              <img src={form.image} alt="Profile" className="w-full h-full object-cover" />
+              <img src={cldUrl(form.image, { width: 240 })} alt="Profile" loading="lazy" decoding="async" className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center pf-chip"><UserIcon size={30} /></div>
             )}

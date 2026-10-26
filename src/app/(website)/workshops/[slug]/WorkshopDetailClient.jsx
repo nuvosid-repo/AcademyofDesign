@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { cldUrl } from "@/lib/img";
 import { motion } from "framer-motion";
 import {
   Calendar, MapPin, Clock, ArrowLeft, ArrowRight, PlayCircle,
@@ -255,7 +256,7 @@ export default function WorkshopDetailPage() {
               <div className="col-12 col-lg-4">
                 <div className={styles.speakerCard}>
                   <div className={styles.speakerAvatar}>
-                    <img src={workshop.speaker.image} alt={workshop.speaker.name} />
+                    <img src={cldUrl(workshop.speaker.image, { width: 300 })} alt={workshop.speaker.name} loading="lazy" decoding="async" />
                   </div>
                   <span className={styles.speakerBadge}>
                     <Mic size={12} /> Lead Speaker

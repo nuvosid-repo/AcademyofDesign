@@ -1,6 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
+import { cldUrl } from '@/lib/img';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Phone, CheckCircle2, Plus, Minus, Tv, ArrowRight, Sparkles } from 'lucide-react';
@@ -384,7 +385,7 @@ export default function CourseDetail() {
                   className={styles.cardInner}
                 >
                   <div className={styles.imgWrap}>
-                    <img src={ins.image} alt={ins.name} />
+                    <img src={cldUrl(ins.image, { width: 200 })} alt={ins.name} loading="lazy" decoding="async" />
                     <div className={styles.imgOverlay} aria-hidden="true" />
                   </div>
                   <div className={styles.instructorInfo}>

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Pencil, Trash2, Presentation, Plus, User, CalendarClock, ListChecks } from "lucide-react";
 import AdminShell from "@/components/portal/AdminShell";
 import { useConfirm } from "@/components/portal/ConfirmDialog";
+import { cldUrl } from "@/lib/img";
 import { DatePicker, TimePicker } from "@/components/portal/DateTimePicker";
 import { apiFetch } from "@/lib/api";
 
@@ -234,7 +235,7 @@ export default function WorkshopsPage() {
                   <tr key={w.id} className="hover:bg-gray-50">
                     <td className="py-3 px-4 text-gray-700">{i + 1}</td>
                     <td className="py-3 px-4">
-                      {w.image ? <img src={w.image} alt={w.title} className="w-12 h-9 rounded-md object-cover" /> : <span className="w-12 h-9 rounded-md bg-gray-100 flex items-center justify-center text-gray-400"><Presentation size={14} /></span>}
+                      {w.image ? <img src={cldUrl(w.image, { width: 120 })} alt={w.title} loading="lazy" decoding="async" className="w-12 h-9 rounded-md object-cover" /> : <span className="w-12 h-9 rounded-md bg-gray-100 flex items-center justify-center text-gray-400"><Presentation size={14} /></span>}
                     </td>
                     <td className="py-3 px-4 font-medium text-gray-900 whitespace-normal max-w-[18rem]">{w.title}</td>
                     <td className="py-3 px-4 text-gray-500">{w.category || "—"}</td>

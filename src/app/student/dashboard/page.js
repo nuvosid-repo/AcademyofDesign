@@ -18,6 +18,7 @@ import {
 import StudentShell from "@/components/portal/StudentShell";
 import { useSession } from "@/context/SessionContext";
 import { apiFetch } from "@/lib/api";
+import { cldUrl } from "@/lib/img";
 
 const MONTHS = [
   "January",
@@ -218,8 +219,10 @@ function BannerSlider() {
       {banners.map((b, idx) => (
         <img
           key={b.id}
-          src={b.image}
+          src={cldUrl(b.image, { width: 1000 })}
           alt="Banner"
+          loading="lazy"
+          decoding="async"
           className="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
           style={{ opacity: idx === i ? 1 : 0 }}
         />

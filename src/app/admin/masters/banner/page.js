@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Upload, Trash2, Image as ImageIcon } from "lucide-react";
 import AdminShell from "@/components/portal/AdminShell";
 import { useConfirm } from "@/components/portal/ConfirmDialog";
+import { cldUrl } from "@/lib/img";
 import { apiFetch } from "@/lib/api";
 
 export default function BannerPage() {
@@ -138,7 +139,7 @@ export default function BannerPage() {
             {banners.map((b) => (
               <div key={b.id} className="relative rounded-xl border border-gray-200 overflow-hidden group">
                 <div className="aspect-[1536/496] bg-gray-50">
-                  <img src={b.image} alt="Banner" className="w-full h-full object-cover" />
+                  <img src={cldUrl(b.image, { width: 800 })} alt="Banner" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                 </div>
                 <div className="absolute top-2 right-2 flex items-center gap-2">
                   <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${b.status === "Active" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>

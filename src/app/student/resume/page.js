@@ -9,6 +9,7 @@ import {
 import StudentShell from "@/components/portal/StudentShell";
 import { useSession } from "@/context/SessionContext";
 import { apiFetch } from "@/lib/api";
+import { cldUrl } from "@/lib/img";
 import ResumePaper from "@/components/resume/ResumePaper";
 import { DISCIPLINES, getDiscipline, allSkills, SECTION_KEYS, SECTION_LABELS, WEAK_OPENERS } from "@/lib/resume/disciplines";
 import {
@@ -523,7 +524,7 @@ export default function ResumeBuilderPage() {
               <h3 className="font-bold">Basics</h3>
               <div className="flex items-center gap-4">
                 <div className="w-20 h-20 rounded-full overflow-hidden border pf-border flex items-center justify-center shrink-0 bg-black/5">
-                  {data.basics.photoUrl ? <img src={data.basics.photoUrl} alt="" className="w-full h-full object-cover" /> : <User size={26} className="pf-faint" />}
+                  {data.basics.photoUrl ? <img src={cldUrl(data.basics.photoUrl, { width: 300 })} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" /> : <User size={26} className="pf-faint" />}
                 </div>
                 <div>
                   <label className="inline-flex items-center gap-1.5 text-sm font-medium text-[#db254f] cursor-pointer hover:underline"><ImagePlus size={15} /> Upload photo<input type="file" accept="image/*" className="hidden" onChange={pickImage((url) => setBasics("photoUrl", url))} /></label>
@@ -585,7 +586,7 @@ export default function ResumeBuilderPage() {
                   <div className="flex items-center justify-between"><span className="text-xs pf-faint font-semibold">Project {i + 1}</span>{actions("projects", i)}</div>
                   <div className="flex gap-3">
                     <div className="w-28 h-20 rounded-lg overflow-hidden border pf-border flex items-center justify-center shrink-0 bg-black/5">
-                      {p.coverImageUrl ? <img src={p.coverImageUrl} alt="" className="w-full h-full object-cover" /> : <ImagePlus size={18} className="pf-faint" />}
+                      {p.coverImageUrl ? <img src={cldUrl(p.coverImageUrl, { width: 500 })} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" /> : <ImagePlus size={18} className="pf-faint" />}
                     </div>
                     <div className="flex-1 space-y-2">
                       <input className={FIELD} placeholder="Project title" value={p.title} onChange={(ev) => setItem("projects", i, { title: ev.target.value })} />

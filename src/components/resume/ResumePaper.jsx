@@ -2,6 +2,7 @@
 // print export, so "what you see = what you get". The paper is always light
 // (never themed), with four ATS-friendly templates. Pure render, no hooks.
 import { SECTION_KEYS, SECTION_LABELS } from "@/lib/resume/disciplines";
+import { cldUrl } from "@/lib/img";
 
 const MONTHS = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function fmtMonth(ym) {
@@ -42,7 +43,7 @@ export default function ResumePaper({ data, scale = 1 }) {
             {items.map((p) => (
               <div key={p.id} style={{ marginBottom: 10, breakInside: "avoid" }}>
                 {grid && hasText(p.coverImageUrl) && (
-                  <img src={p.coverImageUrl} alt="" style={{ width: "100%", height: 96, objectFit: "cover", borderRadius: 6, marginBottom: 6, border: "1px solid #eee" }} />
+                  <img src={cldUrl(p.coverImageUrl, { width: 500 })} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: 96, objectFit: "cover", borderRadius: 6, marginBottom: 6, border: "1px solid #eee" }} />
                 )}
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
                   <span style={{ fontWeight: 700, fontSize: 13.5 }}>{p.title}</span>
@@ -154,7 +155,7 @@ export default function ResumePaper({ data, scale = 1 }) {
               <h1 style={{ fontSize: 28, fontWeight: 800, margin: 0 }}>{b.name || "Your Name"}</h1>
               {hasText(b.headline) && <div style={{ color: accent, fontWeight: 600, fontSize: 14, marginTop: 2 }}>{b.headline}</div>}
             </div>
-            {hasText(b.photoUrl) && <img src={b.photoUrl} alt="" style={{ width: 74, height: 74, borderRadius: template === "classic" ? 6 : "50%", objectFit: "cover", border: "2px solid #eee" }} />}
+            {hasText(b.photoUrl) && <img src={cldUrl(b.photoUrl, { width: 200 })} alt="" loading="lazy" decoding="async" style={{ width: 74, height: 74, borderRadius: template === "classic" ? 6 : "50%", objectFit: "cover", border: "2px solid #eee" }} />}
           </div>
           {contacts.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 14px", fontSize: 12, color: "#555", marginTop: 7 }}>{contacts.map((c, i) => <span key={i}>{c}</span>)}</div>}
           {(b.profiles || []).filter((p) => hasText(p.url)).length > 0 && (

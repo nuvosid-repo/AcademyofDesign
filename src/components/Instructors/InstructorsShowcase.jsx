@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { cldUrl } from "@/lib/img";
 import { ArrowRight, GraduationCap } from "lucide-react";
 import styles from "./Instructors.module.scss";
 
@@ -30,7 +31,7 @@ export default function InstructorsShowcase() {
           >
             <Link href={`/instructors/${ins.slug}`} className={styles.mentorCard}>
               <div className={styles.mentorImage}>
-                <img src={ins.image} alt={ins.name} />
+                <img src={cldUrl(ins.image, { width: 400 })} alt={ins.name} loading="lazy" decoding="async" />
                 <div className={styles.mentorImageOverlay} />
                 {ins.experience && (
                   <span className={styles.expBadge}>{ins.experience}</span>

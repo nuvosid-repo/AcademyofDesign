@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pencil, Trash2, GraduationCap, User, Upload, Plus, Video, Award, Layers } from "lucide-react";
 import AdminShell from "@/components/portal/AdminShell";
 import { useConfirm } from "@/components/portal/ConfirmDialog";
+import { cldUrl } from "@/lib/img";
 import { apiFetch } from "@/lib/api";
 
 const EMPTY = {
@@ -167,7 +168,7 @@ export default function InstructorsPage() {
                   <Upload size={15} /> Choose file
                   <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
                 </label>
-                {form.image && <img src={form.image} alt="" className="w-9 h-9 rounded-full btn-pill object-cover border border-gray-200" />}
+                {form.image && <img src={cldUrl(form.image, { width: 80 })} alt="" loading="lazy" decoding="async" className="w-9 h-9 rounded-full btn-pill object-cover border border-gray-200" />}
               </div>
               <input className={`${field} mt-2`} placeholder="…or paste photo URL" value={form.image?.startsWith("data:") ? "" : form.image} onChange={(e) => { set("image", e.target.value); setFileName(""); }} />
             </div>
@@ -283,7 +284,7 @@ export default function InstructorsPage() {
                   <tr key={i.id} className="hover:bg-gray-50">
                     <td className="py-3 px-4 text-gray-700">{idx + 1}</td>
                     <td className="py-3 px-4">
-                      {i.image ? <img src={i.image} alt={i.name} className="w-10 h-10 rounded-full btn-pill object-cover" /> : <span className="w-10 h-10 rounded-full btn-pill bg-gray-100 text-gray-400 flex items-center justify-center"><User size={18} /></span>}
+                      {i.image ? <img src={cldUrl(i.image, { width: 80 })} alt={i.name} loading="lazy" decoding="async" className="w-10 h-10 rounded-full btn-pill object-cover" /> : <span className="w-10 h-10 rounded-full btn-pill bg-gray-100 text-gray-400 flex items-center justify-center"><User size={18} /></span>}
                     </td>
                     <td className="py-3 px-4 font-medium text-gray-900">{i.name}</td>
                     <td className="py-3 px-4 text-gray-500">{i.role || "—"}</td>

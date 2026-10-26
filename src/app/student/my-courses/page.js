@@ -5,6 +5,7 @@ import { BookOpen, Clock, Compass, GraduationCap, ArrowRight, Calendar, MapPin, 
 import StudentShell from "@/components/portal/StudentShell";
 import EnrollButton from "@/components/Payment/EnrollButton";
 import { apiFetch } from "@/lib/api";
+import { cldUrl } from "@/lib/img";
 
 const priceLabel = (p) => {
   if (!p) return "";
@@ -31,7 +32,7 @@ function CourseThumb({ src, alt }) {
       </div>
     );
   }
-  return <img src={src} alt={alt} loading="lazy" className="w-full h-36 object-cover bg-black/10" onError={() => setErr(true)} />;
+  return <img src={cldUrl(src, { width: 500 })} alt={alt} loading="lazy" decoding="async" className="w-full h-36 object-cover bg-black/10" onError={() => setErr(true)} />;
 }
 
 export default function MyCoursesPage() {
