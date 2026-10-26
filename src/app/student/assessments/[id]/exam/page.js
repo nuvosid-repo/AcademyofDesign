@@ -46,6 +46,7 @@ export default function ExamPage() {
   const proctorFlagsRef = useRef([]);    // violation log { type, at }
   const examStartRef = useRef(0);        // ms timestamp the exam started
   const [camState, setCamState] = useState("idle"); // idle | requesting | denied
+  const [prepCount, setPrepCount] = useState(0);    // 5→1 "get ready" countdown (0 = hidden)
   const [toast, setToast] = useState(""); // transient on-screen proctor warning
 
   const inExam = phase === "mcq" || phase === "written";
@@ -181,8 +182,22 @@ export default function ExamPage() {
     try {
       streamRef.current = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: true });
     } catch { setCamState("denied"); return; }
-    examStartRef.current = Date.now();
     setCamState("idle");
+    // 5-second "get ready" countdown so the student can settle before the
+    // questions appear. The exam timer only starts AFTER it finishes.
+    setPhase("countdown");
+    await new Promise((resolve) => {
+      let n = 5;
+      setPrepCount(n);
+      const tick = () => {
+        n -= 1;
+        if (n <= 0) { setPrepCount(0); resolve(); return; }
+        setPrepCount(n);
+        setTimeout(tick, 1000);
+      };
+      setTimeout(tick, 1000);
+    });
+    examStartRef.current = Date.now();
     setPhase(assessment.mcqEnabled ? "mcq" : "written");
   };
 
@@ -293,6 +308,18 @@ export default function ExamPage() {
       </Screen>
     );
   }
+
+  /* ── Get-ready countdown (5 → 1) before the questions appear ── */
+  if (phase === "countdown") return (
+    <div className="pf-page min-h-screen flex flex-col items-center justify-center p-4 text-center">
+      <style>{`@keyframes examPop{0%{opacity:0;transform:scale(.6)}50%{opacity:1;transform:scale(1.08)}100%{transform:scale(1)}}`}</style>
+      <p className="pf-muted text-sm font-semibold tracking-wide mb-5">Get ready — your exam starts in</p>
+      <div key={prepCount} className="w-32 h-32 rounded-full flex items-center justify-center text-7xl font-extrabold text-white" style={{ background: "linear-gradient(135deg,#db254f,#e56b85)", boxShadow: "0 12px 50px rgba(219,37,79,0.5)", animation: "examPop 0.9s ease-out" }}>
+        {prepCount || ""}
+      </div>
+      <p className="pf-faint text-xs mt-6 max-w-sm">Do not switch tabs once the exam begins — after 3 switches it is submitted automatically.</p>
+    </div>
+  );
 
   /* ── Submitting ── */
   if (phase === "submitting") return (
