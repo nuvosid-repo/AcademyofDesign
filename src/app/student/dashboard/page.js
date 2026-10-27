@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   BookOpen,
@@ -259,7 +259,7 @@ function BannerSlider() {
   );
 }
 
-// seconds → "Xh Ym" / "Ym" / "Zs"
+// seconds → compact "Xh Ym" / "Ym"
 function fmtDur(sec) {
   const s = Math.max(0, Math.round(sec || 0));
   const h = Math.floor(s / 3600);
@@ -268,51 +268,88 @@ function fmtDur(sec) {
   if (m > 0) return `${m}m`;
   return `${s}s`;
 }
+// Live "today" value, shows seconds so the counter visibly ticks.
+function fmtLive(sec) {
+  const s = Math.max(0, Math.floor(sec || 0));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
+  return `${m}m ${String(ss).padStart(2, "0")}s`;
+}
 
-/* Active learning-time card: today / this week / all-time + a 7-day bar chart. */
+/* Minimal learning-time card — a live (ticking) "today" counter that never
+   jumps backwards on refresh, plus Week/Total and a Mon→Sun mini bar chart. */
 function LearningTimeCard() {
-  const [t, setT] = useState(null);
+  const shown = useRef({ today: 0, week: 0, total: 0 }); // monotonic displayed values
+  const lastAct = useRef(Date.now());
+  const todayRef = useRef("");
+  const [live, setLive] = useState({ today: 0, week: 0, total: 0 });
+  const [week, setWeek] = useState([]);
+  const [today, setToday] = useState("");
+
   useEffect(() => {
-    apiFetch("/api/student/study-time", { cache: "no-store" })
-      .then((r) => r.json())
-      .then(setT)
-      .catch(() => setT(null));
+    let alive = true;
+    const pull = () =>
+      apiFetch("/api/student/study-time", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d) => {
+          if (!alive) return;
+          setWeek(d.week || []); setToday(d.today || ""); todayRef.current = d.today || "";
+          let stored = 0;
+          try { stored = parseInt(localStorage.getItem(`studyLive:${d.today}`) || "0", 10) || 0; } catch { /* noop */ }
+          shown.current = {
+            today: Math.max(shown.current.today, d.todaySeconds || 0, stored),
+            week: Math.max(shown.current.week, d.weekSeconds || 0),
+            total: Math.max(shown.current.total, d.totalSeconds || 0),
+          };
+          setLive({ ...shown.current });
+        })
+        .catch(() => {});
+    pull();
+    const resync = setInterval(pull, 60_000);
+
+    const bump = () => { lastAct.current = Date.now(); };
+    const ev = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "click"];
+    ev.forEach((e) => window.addEventListener(e, bump, { passive: true }));
+    const media = () => { try { return Array.from(document.querySelectorAll("video,audio")).some((m) => !m.paused && !m.ended && m.readyState > 2); } catch { return false; } };
+
+    const tick = setInterval(() => {
+      const engaged = !document.hidden && (Date.now() - lastAct.current < 150_000 || media());
+      if (!engaged) return;
+      shown.current = { today: shown.current.today + 1, week: shown.current.week + 1, total: shown.current.total + 1 };
+      setLive({ ...shown.current });
+      try { if (todayRef.current) localStorage.setItem(`studyLive:${todayRef.current}`, String(shown.current.today)); } catch { /* noop */ }
+    }, 1000);
+
+    return () => { alive = false; clearInterval(resync); clearInterval(tick); ev.forEach((e) => window.removeEventListener(e, bump)); };
   }, []);
 
-  const last7 = t?.last7 || [];
-  const max = Math.max(1, ...last7.map((d) => d.seconds || 0));
-  const todayIso = last7.length ? last7[last7.length - 1].date : "";
-  const dayLabel = (iso) => { try { return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { weekday: "short" }).slice(0, 2); } catch { return ""; } };
+  const max = Math.max(1, ...week.map((d) => d.seconds || 0));
+  const dayLabel = (iso) => { try { return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { weekday: "narrow" }); } catch { return ""; } };
 
   return (
-    <div className="pf-card p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-bold flex items-center gap-2"><Clock size={17} className="text-[#db254f]" /> Learning Time</h3>
-        <span className="text-[11px] pf-faint">Active study — idle time isn&apos;t counted</span>
+    <div className="pf-card p-3.5">
+      <div className="flex items-center justify-between mb-2.5">
+        <h3 className="font-bold text-sm flex items-center gap-2"><Clock size={15} className="text-[#db254f]" /> Learning Time</h3>
+        <span className="text-[10px] pf-faint">Active study · idle not counted</span>
       </div>
-
-      <div className="grid grid-cols-3 gap-2.5 mb-4">
-        {[["Today", t?.todaySeconds], ["This Week", t?.weekSeconds], ["All-time", t?.totalSeconds]].map(([label, val], i) => (
-          <div key={label} className="rounded-xl border pf-border p-3 text-center" style={i === 0 ? { background: "rgba(219,37,79,0.06)", borderColor: "rgba(219,37,79,0.25)" } : undefined}>
-            <div className={`font-extrabold leading-none ${i === 0 ? "text-[#db254f] text-xl" : "text-lg"}`}>{t ? fmtDur(val) : "…"}</div>
-            <div className="text-[11px] pf-muted mt-1">{label}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="flex items-end justify-between gap-2 h-[70px]">
-        {(last7.length ? last7 : Array.from({ length: 7 }, () => ({ date: "", seconds: 0 }))).map((d, idx) => (
-          <div key={d.date || idx} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
-            <div className="w-full flex items-end justify-center" style={{ height: 50 }}>
-              <div
-                className="w-full max-w-[24px] rounded-md transition-all duration-300"
-                style={{ height: `${Math.max(4, ((d.seconds || 0) / max) * 50)}px`, background: d.date && d.date === todayIso ? "#db254f" : "rgba(var(--fg-rgb),0.15)" }}
-                title={d.date ? `${d.date}: ${fmtDur(d.seconds)}` : ""}
-              />
+      <div className="flex items-center gap-x-4 gap-y-2.5 flex-wrap">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-2xl font-extrabold text-[#db254f] tabular-nums leading-none">{fmtLive(live.today)}</span>
+          <span className="text-xs pf-muted">today</span>
+        </div>
+        <div className="hidden sm:block h-7 w-px" style={{ background: "rgba(var(--fg-rgb),0.12)" }} />
+        <div className="flex items-center gap-4 text-sm">
+          <span><span className="pf-muted">Week </span><b className="tabular-nums">{fmtDur(live.week)}</b></span>
+          <span><span className="pf-muted">Total </span><b className="tabular-nums">{fmtDur(live.total)}</b></span>
+        </div>
+        <div className="flex items-end gap-1.5 h-10 ml-auto">
+          {(week.length ? week : Array.from({ length: 7 }, () => ({ date: "", seconds: 0 }))).map((d, i) => (
+            <div key={d.date || i} className="flex flex-col items-center gap-1">
+              <div className="w-2 rounded-full transition-all" style={{ height: `${Math.max(3, ((d.seconds || 0) / max) * 26)}px`, background: d.date && d.date === today ? "#db254f" : "rgba(var(--fg-rgb),0.16)" }} title={d.date ? `${d.date}: ${fmtDur(d.seconds)}` : ""} />
+              <span className="text-[9px] pf-faint leading-none">{dayLabel(d.date)}</span>
             </div>
-            <span className="text-[10px] pf-faint">{dayLabel(d.date)}</span>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );

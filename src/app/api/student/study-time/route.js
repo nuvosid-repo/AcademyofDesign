@@ -61,19 +61,24 @@ export async function GET(request) {
   let total = 0;
   for (const r of rows) { byDate[r.date] = (byDate[r.date] || 0) + (r.seconds || 0); total += (r.seconds || 0); }
 
-  const last7 = [];
-  let week = 0;
-  for (let i = 6; i >= 0; i--) {
-    const d = istDate(new Date(Date.now() - i * 86400000));
-    const s = byDate[d] || 0;
-    last7.push({ date: d, seconds: s });
-    week += s;
+  // Current calendar week, Monday → Sunday.
+  const d0 = new Date(today + "T00:00:00Z");
+  const dow = d0.getUTCDay();                 // 0=Sun … 6=Sat
+  const mondayOffset = dow === 0 ? 6 : dow - 1;
+  const week = [];
+  let weekSeconds = 0;
+  for (let i = 0; i < 7; i++) {
+    const ds = new Date(d0.getTime() + (i - mondayOffset) * 86400000).toISOString().slice(0, 10);
+    const s = byDate[ds] || 0;
+    week.push({ date: ds, seconds: s });
+    weekSeconds += s;
   }
 
   return NextResponse.json({
+    today,
     todaySeconds: byDate[today] || 0,
-    weekSeconds: week,
+    weekSeconds,
     totalSeconds: total,
-    last7,
+    week,
   });
 }
