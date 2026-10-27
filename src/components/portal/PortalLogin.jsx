@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -15,7 +15,13 @@ export default function PortalLogin({ brand, requiredRole, redirectTo, hint, var
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [expired, setExpired] = useState(false);
   const light = variant === "light";
+
+  // Show a notice when redirected here after an idle-timeout session expiry.
+  useEffect(() => {
+    try { if (new URLSearchParams(window.location.search).get("expired")) setExpired(true); } catch { /* noop */ }
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -97,6 +103,11 @@ export default function PortalLogin({ brand, requiredRole, redirectTo, hint, var
             <p className={`text-sm mt-1 ${t.sub}`}>Welcome back. Enter your details.</p>
           </div>
 
+          {expired && !error && (
+            <div className="text-sm border rounded-lg px-3 py-2 border-amber-400/40 text-amber-500" style={{ background: "rgba(245,158,11,0.1)" }}>
+              Your session expired due to inactivity. Please sign in again.
+            </div>
+          )}
           {error && <div className={`text-sm border rounded-lg px-3 py-2 ${t.error}`}>{error}</div>}
 
           <div className="space-y-1.5">

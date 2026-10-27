@@ -259,6 +259,65 @@ function BannerSlider() {
   );
 }
 
+// seconds → "Xh Ym" / "Ym" / "Zs"
+function fmtDur(sec) {
+  const s = Math.max(0, Math.round(sec || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${s}s`;
+}
+
+/* Active learning-time card: today / this week / all-time + a 7-day bar chart. */
+function LearningTimeCard() {
+  const [t, setT] = useState(null);
+  useEffect(() => {
+    apiFetch("/api/student/study-time", { cache: "no-store" })
+      .then((r) => r.json())
+      .then(setT)
+      .catch(() => setT(null));
+  }, []);
+
+  const last7 = t?.last7 || [];
+  const max = Math.max(1, ...last7.map((d) => d.seconds || 0));
+  const todayIso = last7.length ? last7[last7.length - 1].date : "";
+  const dayLabel = (iso) => { try { return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { weekday: "short" }).slice(0, 2); } catch { return ""; } };
+
+  return (
+    <div className="pf-card p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-bold flex items-center gap-2"><Clock size={17} className="text-[#db254f]" /> Learning Time</h3>
+        <span className="text-[11px] pf-faint">Active study — idle time isn&apos;t counted</span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2.5 mb-4">
+        {[["Today", t?.todaySeconds], ["This Week", t?.weekSeconds], ["All-time", t?.totalSeconds]].map(([label, val], i) => (
+          <div key={label} className="rounded-xl border pf-border p-3 text-center" style={i === 0 ? { background: "rgba(219,37,79,0.06)", borderColor: "rgba(219,37,79,0.25)" } : undefined}>
+            <div className={`font-extrabold leading-none ${i === 0 ? "text-[#db254f] text-xl" : "text-lg"}`}>{t ? fmtDur(val) : "…"}</div>
+            <div className="text-[11px] pf-muted mt-1">{label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-end justify-between gap-2 h-[70px]">
+        {(last7.length ? last7 : Array.from({ length: 7 }, () => ({ date: "", seconds: 0 }))).map((d, idx) => (
+          <div key={d.date || idx} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
+            <div className="w-full flex items-end justify-center" style={{ height: 50 }}>
+              <div
+                className="w-full max-w-[24px] rounded-md transition-all duration-300"
+                style={{ height: `${Math.max(4, ((d.seconds || 0) / max) * 50)}px`, background: d.date && d.date === todayIso ? "#db254f" : "rgba(var(--fg-rgb),0.15)" }}
+                title={d.date ? `${d.date}: ${fmtDur(d.seconds)}` : ""}
+              />
+            </div>
+            <span className="text-[10px] pf-faint">{dayLabel(d.date)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function StudentDashboard() {
   const { user } = useSession();
   const [data, setData] = useState(null);
@@ -331,6 +390,11 @@ export default function StudentDashboard() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Learning time tracker */}
+      <div className="mt-3">
+        <LearningTimeCard />
       </div>
 
       {/* Row 3 — calendar (left) + stacked scores/classes (right), equal height */}
