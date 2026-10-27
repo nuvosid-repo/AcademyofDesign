@@ -399,7 +399,7 @@ export default function StudentDashboard() {
               Welcome back
             </p>
             <h2 className="text-xl md:text-2xl font-extrabold">
-              {user?.name || data?.student?.name || "Student"} 👋
+              {data?.student?.name || user?.name || "Student"} 👋
             </h2>
             <p className="pf-muted mt-1 text-sm">
               Your courses, live sessions, scores and assessments — all in one
