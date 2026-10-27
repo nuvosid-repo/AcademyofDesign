@@ -74,8 +74,12 @@ export default function StudentProfilePage() {
       const d = await res.json();
       if (res.ok) {
         setForm(d.profile); setMsg("Profile updated successfully.");
-        // Update the portal avatar (topbar) live.
-        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("profile-image", { detail: d.profile.image || "" }));
+        // Update the portal avatar (topbar) live, and refresh the session so the
+        // new name shows in the welcome card / top bar without a reload.
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("profile-image", { detail: d.profile.image || "" }));
+          window.dispatchEvent(new Event("nuvosid-auth-changed"));
+        }
       } else setErr(d.error || "Failed to update profile.");
     } finally { setSaving(false); }
   };
