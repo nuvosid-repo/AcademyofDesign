@@ -25,16 +25,16 @@ const VARIANTS = [
   {
     num: "01",
     titleLines: ["UI/UX", "Design &"],
-    img: "/assets/hero-male.png",
-    instructor: "Marcus Thorne",
-    role: "Lead UI/UX Mentor",
+    img: "/assets/team/siddhart.png",
+    instructor: "Siddharth Sharma",
+    role: "Founder & Promoter",
   },
   {
     num: "02",
     titleLines: ["Graphic", "Design"],
-    img: "/assets/hero-female.png",
-    instructor: "Sarah Jenkins",
-    role: "Creative Director",
+    img: "/assets/team/arun.png",
+    instructor: "Arun Kumar Sharma",
+    role: "Chairman Emeritus",
   },
 ];
 
