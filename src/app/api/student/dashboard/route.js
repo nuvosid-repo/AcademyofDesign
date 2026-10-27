@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { resolveUseMock, mockEnrollments, mockCourses, mockLiveClasses, mockAssessments, mockAssessmentResults } from "@/lib/db";
+import { resolveUseMock, mockEnrollments, mockCourses, mockLiveClasses, mockAssessments, mockAssessmentResults, mockStudents } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import Student from "@/models/Student";
 import Enrollment from "@/models/Enrollment";
 import Course from "@/models/Course";
 import LiveClass from "@/models/LiveClass";
@@ -34,6 +35,12 @@ export async function GET(request) {
         Assessment.find().lean(),
         AssessmentResult.find({ studentId: auth.id }).sort({ createdAt: -1 }).lean(),
       ]);
+
+  // Current name from the DB (not the token) so admin / profile name edits show.
+  const me = useMock
+    ? mockStudents().find((x) => ((x._id && x._id.toString()) || x.id) === auth.id)
+    : await Student.findById(auth.id).select("name").lean().catch(() => null);
+  const studentName = me?.name || auth.name || "Student";
 
   const courseIds = new Set(enrollments.map((e) => e.courseId).filter(Boolean));
   const courseTitles = new Set(enrollments.map((e) => e.courseTitle).filter(Boolean));
@@ -111,7 +118,7 @@ export async function GET(request) {
   const avgScore = quizPct.length ? Math.round(quizPct.reduce((n, p) => n + p, 0) / quizPct.length) : 0;
 
   return NextResponse.json({
-    student: { name: auth.name || "Student" },
+    student: { name: studentName },
     stats: {
       enrolled: courses.length,
       liveClasses: liveClasses.length,
