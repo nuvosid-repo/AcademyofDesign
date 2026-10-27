@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   ArrowLeft, ArrowRight, BookOpen, PlayCircle, FileText, HelpCircle, ChevronDown, Clock,
   Users, Download, CheckCircle2, Video as VideoIcon, Lock, Check, Eye, X, Loader2,
-  Play, Pause, SkipForward, SkipBack, Zap,
+  Play, Pause, SkipForward, SkipBack, Zap, Box, ExternalLink,
 } from "lucide-react";
 import StudentShell from "@/components/portal/StudentShell";
 import { apiFetch } from "@/lib/api";
@@ -492,6 +492,22 @@ export default function CourseLearningPage() {
               </div>
             )}
           </div>
+
+          {/* 3D Model for the current class (opens an interactive preview in a new tab) */}
+          {curClass?.has3dModel && (
+            <div className="mt-5 pt-4 border-t pf-border">
+              <div className="text-[11px] font-bold uppercase tracking-wide pf-faint mb-2.5 flex items-center gap-1.5"><Box size={13} className="text-[#db254f]" /> 3D Model</div>
+              <a href={`/student/courses/${id}/model?ci=${curClass.index}`} target="_blank" rel="noopener noreferrer"
+                className="group w-full flex items-center gap-3 rounded-xl p-2.5 transition text-left" style={{ background: "rgba(99,102,241,0.10)", border: "1px solid rgba(99,102,241,0.25)" }}>
+                <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-indigo-500" style={{ background: "rgba(99,102,241,0.18)" }}><Box size={16} /></span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold truncate">Show 3D Model</div>
+                  <div className="text-[11px] pf-faint">Interactive preview · opens in a new tab</div>
+                </div>
+                <ExternalLink size={15} className="pf-faint group-hover:text-indigo-500 shrink-0 transition" />
+              </a>
+            </div>
+          )}
         </aside>
       </div>
 

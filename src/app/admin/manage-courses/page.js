@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, Fragment } from "react";
-import { Pencil, Trash2, Plus, X, BookOpen, Video as VideoIcon, FileText, Upload, ChevronDown, HelpCircle, Check } from "lucide-react";
+import { Pencil, Trash2, Plus, X, BookOpen, Video as VideoIcon, FileText, Upload, ChevronDown, HelpCircle, Check, Box } from "lucide-react";
 import AdminShell from "@/components/portal/AdminShell";
 import SearchSelect from "@/components/portal/SearchSelect";
 import MultiSelect from "@/components/portal/MultiSelect";
@@ -72,9 +72,10 @@ export default function ManageCoursesPage() {
 
   const addClass = () => setClasses((cs) => {
     const n = cs.filter((c) => !c.type || c.type === "class").length + 1;
-    return [...cs, { type: "class", name: `Class ${n}`, videos: [], materials: [] }];
+    return [...cs, { type: "class", name: `Class ${n}`, videos: [], materials: [], model3dHtml: "" }];
   });
   const updateClassName = (ci, v) => mutClass(ci, (c) => ({ ...c, name: v }));
+  const updateClassModel3d = (ci, v) => mutClass(ci, (c) => ({ ...c, model3dHtml: v }));
   const removeClass = (ci) => setClasses((cs) => cs.filter((_, i) => i !== ci));
 
   // ── Quizzes: a curriculum item (type "quiz") holding questions ──
@@ -145,9 +146,10 @@ export default function ManageCoursesPage() {
             videos: c.videos.filter((v) => v.title.trim() || v.url.trim()),
             materials: c.materials.filter((m) => m.data),
             questions: [],
+            model3dHtml: (c.model3dHtml || "").trim(),
           };
         })
-        .filter((c) => (c.type === "quiz" ? c.questions.length : (c.name.trim() || c.videos.length || c.materials.length)));
+        .filter((c) => (c.type === "quiz" ? c.questions.length : (c.name.trim() || c.videos.length || c.materials.length || (c.model3dHtml || "").trim())));
       const payload = { ...form, instructor: form.instructors[0] || "", classes: cleanClasses, videos: [], materials: [] };
       const res = editingId
         ? await apiFetch(`/api/courses/${editingId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
@@ -183,7 +185,7 @@ export default function ManageCoursesPage() {
       classes: (full.classes && full.classes.length)
         ? full.classes.map((cl) => (cl.type === "quiz"
             ? { type: "quiz", name: cl.name || "", videos: [], materials: [], questions: (cl.questions || []).map((q) => ({ question: q.question || "", options: (q.options && q.options.length) ? q.options : ["", "", "", ""], correctIndex: q.correctIndex || 0 })) }
-            : { type: "class", name: cl.name || "", videos: cl.videos || [], materials: cl.materials || [], questions: [] }))
+            : { type: "class", name: cl.name || "", videos: cl.videos || [], materials: cl.materials || [], questions: [], model3dHtml: cl.model3dHtml || "" }))
         : ((full.videos?.length || full.materials?.length)
             ? [{ type: "class", name: "Class 1", videos: full.videos || [], materials: full.materials || [], questions: [] }]
             : []),
@@ -460,6 +462,16 @@ export default function ManageCoursesPage() {
                               ))}
                             </div>
                           )}
+                        </div>
+
+                        {/* 3D Model embed for this class */}
+                        <div className="border-t border-gray-100 pt-4">
+                          <div className="flex items-center justify-between mb-1">
+                            <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2"><Box size={14} className="text-[#db254f]" /> 3D Model Embed</h4>
+                            {cls.model3dHtml?.trim() ? <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold">Added</span> : null}
+                          </div>
+                          <p className="text-xs text-gray-400 mb-2">Paste the embed HTML (e.g. a Sketchfab iframe, &lt;model-viewer&gt;, or Three.js). Students get a &quot;Show 3D Model&quot; button that opens it in a new tab. Leave empty for none.</p>
+                          <textarea rows={4} className={`${field} resize-y font-mono text-xs`} placeholder={'<iframe src="https://sketchfab.com/models/.../embed" ...></iframe>\n— or —\n<model-viewer src="model.glb" camera-controls auto-rotate></model-viewer>'} value={cls.model3dHtml || ""} onChange={(e) => updateClassModel3d(ci, e.target.value)} />
                         </div>
                       </div>
                     </div>

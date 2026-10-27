@@ -73,6 +73,9 @@ export async function GET(request, { params }) {
         .map((m, j) => ({ name: m.name || "", fileName: m.fileName || "", type: m.type || "", j }))
         .filter((m) => m.fileName || m.name)
         .map((m) => ({ name: m.name, fileName: m.fileName, type: m.type, url: `${base}/material/?ci=${index}&mi=${m.j}` })),
+      // The 3D model HTML itself loads only when previewed (see /model route);
+      // here we just flag whether this class has one.
+      has3dModel: !!((c.model3dHtml || "").trim()),
     };
   });
 

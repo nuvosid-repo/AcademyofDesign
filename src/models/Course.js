@@ -40,6 +40,7 @@ const ClassSchema = new mongoose.Schema(
     videos: { type: [VideoSchema], default: [] },
     materials: { type: [MaterialSchema], default: [] },
     questions: { type: [QuizQuestionSchema], default: [] },
+    model3dHtml: { type: String, default: "" }, // admin-pasted HTML embed for a 3D model preview
   },
   { _id: false }
 );
