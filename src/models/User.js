@@ -27,6 +27,7 @@ const UserSchema = new mongoose.Schema({
     enum: ["student", "admin"],
     default: "student",
   },
+  sessionId: { type: String, default: "" }, // current single active session (set on login)
   createdAt: {
     type: Date,
     default: Date.now,

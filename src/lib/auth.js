@@ -10,6 +10,7 @@ export async function signToken(user) {
     id: (user._id && user._id.toString()) || user.id || "mock_user_id",
     role: user.role || "student",
     name: user.name || "Demo User",
+    sid: user.sid || "", // single-session id; mismatch with the DB logs the old device out
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()

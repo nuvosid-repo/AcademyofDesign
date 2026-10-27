@@ -115,9 +115,22 @@ export async function POST(request) {
       );
     }
 
-    const token = await signToken(
-      isPanelAdmin ? { _id: user._id, id: user._id, name: user.name, role: "admin" } : user
-    );
+    // Single active session: a fresh id is stored on the account at every login,
+    // so any previously-signed-in device (holding the old id) is logged out.
+    const sid = (globalThis.crypto?.randomUUID?.() || String(Date.now()) + Math.random().toString(36).slice(2));
+    if (useMock) {
+      user.sessionId = sid;
+    } else {
+      try { await user.updateOne({ $set: { sessionId: sid } }); } catch { /* best effort */ }
+    }
+
+    const token = await signToken({
+      _id: user._id,
+      id: (user._id && user._id.toString()) || user.id,
+      name: user.name,
+      role: effectiveRole,
+      sid,
+    });
     return NextResponse.json({
       message: "Login successful",
       success: true,

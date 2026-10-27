@@ -16,27 +16,32 @@ export async function GET(request) {
     }
     const payload = await verifyToken(token);
 
-    // Resolve the CURRENT name from the DB (not the one baked into the token at
-    // login) so an admin editing a student/user's name reflects without a
-    // re-login. Falls back to the token name on any lookup issue.
+    // Resolve the current account record from the DB (not the token snapshot),
+    // so (a) the latest NAME shows without a re-login, and (b) single-session is
+    // enforced: if the stored sessionId differs from this token's, a newer login
+    // on another device has superseded this one → log it out.
     let name = payload.name;
+    let dbUser = null;
     try {
       const useMock = await resolveUseMock();
       if (useMock) {
         const stores = payload.role === "admin" ? [mockUsers(), mockAdminUsers()] : [mockStudents()];
         for (const st of stores) {
           const found = st.find((x) => (((x._id && x._id.toString()) || x.id) || "") === payload.id);
-          if (found?.name) { name = found.name; break; }
+          if (found) { dbUser = found; break; }
         }
       } else if (payload.role === "admin") {
-        const u = (await User.findById(payload.id).select("name").lean().catch(() => null))
-              || (await AdminUser.findById(payload.id).select("name").lean().catch(() => null));
-        if (u?.name) name = u.name;
+        dbUser = (await User.findById(payload.id).select("name sessionId").lean().catch(() => null))
+              || (await AdminUser.findById(payload.id).select("name sessionId").lean().catch(() => null));
       } else {
-        const s = await Student.findById(payload.id).select("name").lean().catch(() => null);
-        if (s?.name) name = s.name;
+        dbUser = await Student.findById(payload.id).select("name sessionId").lean().catch(() => null);
       }
-    } catch { /* keep the token name */ }
+      if (dbUser?.name) name = dbUser.name;
+    } catch { /* keep the token name; skip session enforcement on lookup error */ }
+
+    if (dbUser && dbUser.sessionId && payload.sid !== dbUser.sessionId) {
+      return NextResponse.json({ authenticated: false, reason: "session_superseded" }, { status: 401 });
+    }
 
     return NextResponse.json({
       authenticated: true,

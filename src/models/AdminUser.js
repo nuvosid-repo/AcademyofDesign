@@ -10,6 +10,7 @@ const AdminUserSchema = new mongoose.Schema({
   username: { type: String, required: [true, "Username is required"], trim: true },
   password: { type: String, required: [true, "Password is required"] },
   status: { type: String, enum: ["Active", "Inactive"], default: "Active" },
+  sessionId: { type: String, default: "" }, // current single active session (set on login)
   createdAt: { type: Date, default: Date.now },
 });
 

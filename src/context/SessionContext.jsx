@@ -1,6 +1,6 @@
 "use client";
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { apiFetch, clearToken, onAuthChange } from "@/lib/api";
+import { apiFetch, clearToken, getToken, onAuthChange } from "@/lib/api";
 
 const SessionContext = createContext(null);
 
@@ -13,15 +13,25 @@ export function SessionProvider({ children }) {
   const refresh = useCallback(() => {
     setLoading(true);
     return apiFetch("/api/auth/check", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((data) => setUser(data.authenticated ? data.user : null))
-      .catch(() => setUser(null))
+      .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (ok && data?.authenticated) { setUser(data.user); return; }
+        // Definitive server rejection (expired, invalid, or superseded by a
+        // login on another device) → drop the dead token and log out.
+        setUser(null);
+        try { if (getToken()) clearToken(); } catch { /* noop */ }
+      })
+      .catch(() => setUser(null)) // transient/network error: keep the token
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     refresh();
-    return onAuthChange(refresh);
+    const off = onAuthChange(refresh);
+    // Re-validate periodically so a session superseded by a login elsewhere is
+    // logged out promptly (single active session).
+    const iv = setInterval(() => { if (getToken()) refresh(); }, 45_000);
+    return () => { off(); clearInterval(iv); };
   }, [refresh]);
 
   const logout = useCallback(() => {

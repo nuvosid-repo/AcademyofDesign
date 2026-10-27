@@ -15,6 +15,7 @@ const StudentSchema = new mongoose.Schema({
   subscriptionType: { type: String, default: "B2C" }, // B2C | B2B
   password: { type: String, required: [true, "Password is required"] },
   status: { type: String, enum: ["Active", "Inactive"], default: "Active" },
+  sessionId: { type: String, default: "" }, // current single active session (set on login)
   createdAt: { type: Date, default: Date.now },
 });
 
