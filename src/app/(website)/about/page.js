@@ -5,6 +5,7 @@ import { ScrollTrigger } from "gsap/dist/ScrollTrigger";
 import Hero from "@/components/About/Hero";
 import Legacy from "@/components/About/Legacy";
 import Founder from "@/components/About/Founder";
+import Team from "@/components/About/Team";
 import Stats from "@/components/About/Stats";
 import Pillars from "@/components/About/Pillars";
 import Presence from "@/components/About/Presence";
@@ -73,6 +74,7 @@ export default function AboutPage() {
       <Stats />
       <Pillars />
       <Founder />
+      <Team />
       <Presence />
       <Vision />
       <Testimonials
