@@ -1,7 +1,11 @@
 "use client";
 import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { apiFetch, clearToken, getToken } from "@/lib/api";
+
+// Pages where learning time is NOT tracked and idle-logout is paused — the exam
+// and live interview run their own timers/anti-cheat.
+const EXCLUDED = /\/(exam|interview)(\/|$|\?)/;
 
 const HEARTBEAT_MS = 60_000;        // ping every minute
 const ACTIVE_WINDOW_MS = 150_000;   // "active" = interacted within the last 2.5 min
@@ -20,6 +24,9 @@ function mediaPlaying() {
 // student portal; renders nothing.
 export default function StudyTimeTracker() {
   const router = useRouter();
+  const pathname = usePathname();
+  const pathRef = useRef(pathname);
+  pathRef.current = pathname; // kept current so the interval sees the live route
   const lastActivity = useRef(Date.now());
   const stopped = useRef(false);
 
@@ -33,6 +40,11 @@ export default function StudyTimeTracker() {
     let timer;
     const beat = () => {
       if (stopped.current) return;
+      // On the exam / interview, don't count time or idle-log-out — and keep the
+      // idle clock fresh so leaving those pages doesn't trigger a logout.
+      if (EXCLUDED.test(pathRef.current || "")) { lastActivity.current = Date.now(); return; }
+      // Not signed in (e.g. the login page) → nothing to track or expire.
+      if (!getToken("student")) { lastActivity.current = Date.now(); return; }
       const idle = Date.now() - lastActivity.current;
 
       // Session expires after long inactivity → log the student out.
