@@ -381,3 +381,14 @@ p, .desc, .description, .subtitle, [class*="desc"], [class*="description"], [cla
    subtle brand ring (only for keyboard focus). */
 .pf-page button:focus { outline: none; }
 .pf-page button:focus-visible { outline: 2px solid rgba(219,37,79,0.55); outline-offset: 2px; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   TEMPORARY: force Verdana across the whole project.
+   To restore the original fonts (Inter body + Bebas Neue headings), just
+   delete this block.
+   ───────────────────────────────────────────────────────────────────────── */
+body, body *,
+h1, h2, h3, h4, h5, h6,
+input, textarea, select, button {
+  font-family: Verdana, Geneva, Tahoma, sans-serif !important;
+}
