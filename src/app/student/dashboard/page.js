@@ -18,6 +18,7 @@ import {
 import StudentShell from "@/components/portal/StudentShell";
 import { useSession } from "@/context/SessionContext";
 import { apiFetch } from "@/lib/api";
+import { getStudy, subscribeStudy } from "@/lib/studyStore";
 import { cldUrl } from "@/lib/cldImage";
 
 const MONTHS = [
@@ -279,49 +280,13 @@ function fmtLive(sec) {
 /* Minimal learning-time card — a live (ticking) "today" counter that never
    jumps backwards on refresh, plus Week/Total and a Mon→Sun mini bar chart. */
 function LearningTimeCard() {
-  const shown = useRef({ today: 0, week: 0, total: 0 }); // monotonic displayed values
-  const lastAct = useRef(Date.now());
-  const todayRef = useRef("");
-  const [live, setLive] = useState({ today: 0, week: 0, total: 0 });
-  const [week, setWeek] = useState([]);
-  const [today, setToday] = useState("");
-
-  useEffect(() => {
-    let alive = true;
-    const pull = () =>
-      apiFetch("/api/student/study-time", { cache: "no-store" })
-        .then((r) => r.json())
-        .then((d) => {
-          if (!alive) return;
-          setWeek(d.week || []); setToday(d.today || ""); todayRef.current = d.today || "";
-          let stored = 0;
-          try { stored = parseInt(localStorage.getItem(`studyLive:${d.today}`) || "0", 10) || 0; } catch { /* noop */ }
-          shown.current = {
-            today: Math.max(shown.current.today, d.todaySeconds || 0, stored),
-            week: Math.max(shown.current.week, d.weekSeconds || 0),
-            total: Math.max(shown.current.total, d.totalSeconds || 0),
-          };
-          setLive({ ...shown.current });
-        })
-        .catch(() => {});
-    pull();
-    const resync = setInterval(pull, 60_000);
-
-    const bump = () => { lastAct.current = Date.now(); };
-    const ev = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "click"];
-    ev.forEach((e) => window.addEventListener(e, bump, { passive: true }));
-    const media = () => { try { return Array.from(document.querySelectorAll("video,audio")).some((m) => !m.paused && !m.ended && m.readyState > 2); } catch { return false; } };
-
-    const tick = setInterval(() => {
-      const engaged = !document.hidden && (Date.now() - lastAct.current < 150_000 || media());
-      if (!engaged) return;
-      shown.current = { today: shown.current.today + 1, week: shown.current.week + 1, total: shown.current.total + 1 };
-      setLive({ ...shown.current });
-      try { if (todayRef.current) localStorage.setItem(`studyLive:${todayRef.current}`, String(shown.current.today)); } catch { /* noop */ }
-    }, 1000);
-
-    return () => { alive = false; clearInterval(resync); clearInterval(tick); ev.forEach((e) => window.removeEventListener(e, bump)); };
-  }, []);
+  // The counter lives in the layout-level tracker's shared store, so it keeps
+  // running across page navigation. This card just subscribes and displays.
+  const [v, setV] = useState(getStudy());
+  useEffect(() => subscribeStudy(setV), []);
+  const live = { today: v.today || 0, week: v.week || 0, total: v.total || 0 };
+  const week = v.days || [];
+  const today = v.todayDate || "";
 
   const max = Math.max(1, ...week.map((d) => d.seconds || 0));
   const dayLabel = (iso) => { try { return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { weekday: "narrow" }); } catch { return ""; } };
