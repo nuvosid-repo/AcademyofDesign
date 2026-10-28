@@ -388,7 +388,7 @@ p, .desc, .description, .subtitle, [class*="desc"], [class*="description"], [cla
    delete this block.
    ───────────────────────────────────────────────────────────────────────── */
 body, body *,
-h1, h2, h3, h4, h5, h6,
+h1, h2, h3, h4, h5, h6, .display-font,
 input, textarea, select, button {
   font-family: Verdana, Geneva, Tahoma, sans-serif !important;
 }
