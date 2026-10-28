@@ -392,7 +392,7 @@ export default function CourseLearningPage() {
       <div className="mb-5">
         {course.category && <span className="text-xs uppercase tracking-wide text-[#db254f] font-bold">{course.category}</span>}
         <h1 className="font-extrabold text-2xl md:text-3xl leading-tight mt-1">{course.title}</h1>
-        {course.description && <p className="pf-muted mt-2 text-sm leading-relaxed max-w-3xl">{course.description}</p>}
+        {course.description && <p className="pf-muted mt-2 text-sm leading-relaxed">{course.description}</p>}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mt-3 text-sm">
           <span className="inline-flex items-center gap-1.5 pf-muted"><BookOpen size={15} className="text-[#db254f]" /> {classCount} class{classCount !== 1 ? "es" : ""}</span>
           <span className="inline-flex items-center gap-1.5 pf-muted"><VideoIcon size={15} className="text-[#db254f]" /> {videoCount} video{videoCount !== 1 ? "s" : ""}</span>

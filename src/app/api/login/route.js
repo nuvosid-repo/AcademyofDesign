@@ -121,7 +121,11 @@ export async function POST(request) {
     if (useMock) {
       user.sessionId = sid;
     } else {
-      try { await user.updateOne({ $set: { sessionId: sid } }); } catch { /* best effort */ }
+      // strict:false guarantees the field is written even if a stale/cached
+      // Mongoose model (compiled before `sessionId` existed) would otherwise
+      // drop it — a silent drop desyncs the token's sid from the DB and locks
+      // every login out with "session_superseded".
+      try { await user.updateOne({ $set: { sessionId: sid } }, { strict: false }); } catch { /* best effort */ }
     }
 
     const token = await signToken({
