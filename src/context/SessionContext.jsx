@@ -10,8 +10,10 @@ export function SessionProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(() => {
-    setLoading(true);
+  // `silent` background checks never toggle `loading`, so periodic re-validation
+  // doesn't flash the portal's loading screen (which would remount the page).
+  const refresh = useCallback((silent = false) => {
+    if (!silent) setLoading(true);
     return apiFetch("/api/auth/check", { cache: "no-store" })
       .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {
@@ -21,16 +23,15 @@ export function SessionProvider({ children }) {
         setUser(null);
         try { if (getToken()) clearToken(); } catch { /* noop */ }
       })
-      .catch(() => setUser(null)) // transient/network error: keep the token
-      .finally(() => setLoading(false));
+      .catch(() => { if (!silent) setUser(null); }) // transient error on a silent check: keep the session
+      .finally(() => { if (!silent) setLoading(false); });
   }, []);
 
   useEffect(() => {
-    refresh();
-    const off = onAuthChange(refresh);
-    // Re-validate periodically so a session superseded by a login elsewhere is
-    // logged out promptly (single active session).
-    const iv = setInterval(() => { if (getToken()) refresh(); }, 45_000);
+    refresh();                                   // initial: shows the loading state
+    const off = onAuthChange(() => refresh(true)); // token change: silent
+    // Re-validate periodically (single active session) — silent, no flicker.
+    const iv = setInterval(() => { if (getToken()) refresh(true); }, 45_000);
     return () => { off(); clearInterval(iv); };
   }, [refresh]);
 
