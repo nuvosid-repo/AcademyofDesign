@@ -422,7 +422,7 @@ export default function CourseLearningPage() {
                   )}
                 </div>
                 <span className="text-xs uppercase tracking-wide text-[#db254f] font-semibold">{currentVideo.className}</span>
-                <h2 className="font-bold text-xl mt-1" style={{ marginTop: "0.25rem", marginBottom: 0 }}>{currentVideo.title || "Untitled video"}</h2>
+                <h2 className="font-bold text-xl md:text-2xl mt-1" style={{ marginTop: "0.25rem", marginBottom: 0 }}>{currentVideo.title || "Untitled video"}</h2>
                 {currentVideo.description && <p className="pf-muted text-sm mt-2 leading-relaxed clear-both text-justify">{currentVideo.description}</p>}
               </div>
             </>
@@ -512,7 +512,7 @@ export default function CourseLearningPage() {
       </div>
 
       {/* ── Curriculum ── */}
-      <h2 className="text-xl font-bold" style={{ marginTop: "2.5rem", marginBottom: "1rem" }}>Course Content</h2>
+      <h2 className="text-2xl md:text-3xl font-bold" style={{ marginTop: "2.5rem", marginBottom: "1rem" }}>Course Content</h2>
       {curriculum.length === 0 ? (
         <div className="pf-card p-8 text-center pf-muted">No content added to this course yet.</div>
       ) : (

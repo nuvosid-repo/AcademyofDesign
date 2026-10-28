@@ -95,7 +95,7 @@ export default function StudentProfilePage() {
   return (
     <StudentShell subtitle="Profile">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold mb-1">My Profile</h2>
+        <h2 className="text-2xl md:text-3xl font-bold mb-1">My Profile</h2>
         <p className="pf-muted">Complete your profile so we can personalise your experience.</p>
       </div>
 

@@ -363,7 +363,7 @@ export default function StudentDashboard() {
             <p className="text-[11px] uppercase tracking-[0.18em] text-[#db254f] font-semibold mb-1">
               Welcome back
             </p>
-            <h2 className="text-xl md:text-2xl font-extrabold">
+            <h2 className="text-2xl md:text-3xl font-extrabold">
               {data?.student?.name || user?.name || "Student"} 👋
             </h2>
             <p className="pf-muted mt-1 text-sm">

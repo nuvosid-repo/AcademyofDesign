@@ -13,7 +13,7 @@ import { useTheme } from "@/context/ThemeContext";
 // via the site's data-theme tokens. `nav` items are either:
 //   { href, label, icon }                        → a plain link
 //   { label, icon, children: [{ href, label }] } → a collapsible group
-export default function PortalShell({ brand, subtitle, nav, loginPath, children }) {
+export default function PortalShell({ brand, subtitle, nav, loginPath, scopeClass = "", children }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useSession();
@@ -113,7 +113,7 @@ export default function PortalShell({ brand, subtitle, nav, loginPath, children 
   );
 
   return (
-    <div className="min-h-screen flex pf-page relative">
+    <div className={`min-h-screen flex pf-page relative ${scopeClass}`}>
       {/* Decorative brand glows */}
       <span className="pf-glow" style={{ width: 360, height: 360, top: -120, left: 160, background: "rgba(219,37,79,0.18)" }} aria-hidden="true" />
       <span className="pf-glow" style={{ width: 300, height: 300, bottom: -80, right: -40, background: "rgba(229,107,133,0.14)" }} aria-hidden="true" />

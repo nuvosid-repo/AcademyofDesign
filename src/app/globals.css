@@ -381,3 +381,19 @@ p, .desc, .description, .subtitle, [class*="desc"], [class*="description"], [cla
    subtle brand ring (only for keyboard focus). */
 .pf-page button:focus { outline: none; }
 .pf-page button:focus-visible { outline: 2px solid rgba(219,37,79,0.55); outline-offset: 2px; }
+
+/* ── Student portal readability ──
+   The student panel's body text ran small. Scope a modest bump to the Tailwind
+   text-size utilities used across its pages (via the .pf-student wrapper on the
+   PortalShell root) so everything reads larger — without touching the admin
+   portal, icons, or layout. Sizes are in rem (root = 16px); line-heights scale
+   with them so nothing clips. */
+.pf-student .text-\[9px\]  { font-size: 11px; }
+.pf-student .text-\[10px\] { font-size: 12.5px; }
+.pf-student .text-\[11px\] { font-size: 13.5px; }
+.pf-student .text-xs   { font-size: 0.92rem;  line-height: 1.35rem; }  /* 12 → 14.7px */
+.pf-student .text-sm   { font-size: 1.06rem;  line-height: 1.6rem;  }  /* 14 → 17px   */
+.pf-student .text-base { font-size: 1.19rem;  line-height: 1.8rem;  }  /* 16 → 19px   */
+.pf-student .text-\[15px\] { font-size: 18px; }
+.pf-student .text-lg   { font-size: 1.34rem;  line-height: 1.95rem; }  /* 18 → 21.5px */
+.pf-student .text-xl   { font-size: 1.48rem;  line-height: 2.1rem;  }  /* 20 → 23.5px */

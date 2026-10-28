@@ -60,7 +60,7 @@ export default function StudentAssessmentsPage() {
   return (
     <StudentShell subtitle="Assessments">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold mb-1">Assessments</h2>
+        <h2 className="text-2xl md:text-3xl font-bold mb-1">Assessments</h2>
         <p className="pf-muted">Take the timed exam (MCQ + written), then attend your live interview.</p>
       </div>
 
@@ -99,7 +99,7 @@ export default function StudentAssessmentsPage() {
                     </div>
                   )}
                   <p className="text-xs text-[#db254f] font-semibold uppercase tracking-wide">{a.course}</p>
-                  <h3 className="font-bold text-lg mt-0.5">{a.title}</h3>
+                  <h3 className="font-bold text-2xl md:text-3xl mt-0.5">{a.title}</h3>
                   {a.description && <p className="pf-muted text-sm mt-1.5 text-justify">{a.description}</p>}
                   {a.autoSubmittedForTabSwitch && (
                     <div className="mt-2.5 rounded-lg px-3 py-2 text-xs flex items-start gap-2 clear-both" style={{ background: "rgba(244,63,94,0.12)", border: "1px solid rgba(244,63,94,0.28)" }}>

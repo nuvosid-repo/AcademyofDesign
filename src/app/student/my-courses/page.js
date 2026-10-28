@@ -61,7 +61,7 @@ export default function MyCoursesPage() {
       {/* ── Enrolled courses ── */}
       <div className="flex items-center gap-2 mb-4">
         <GraduationCap size={20} className="text-[#db254f]" />
-        <h2 className="text-2xl font-bold">My Courses</h2>
+        <h2 className="text-2xl md:text-3xl font-bold">My Courses</h2>
       </div>
 
       {loading ? (
@@ -76,7 +76,7 @@ export default function MyCoursesPage() {
             <Link key={c.id} href={`/student/courses/${c.id}`} className="pf-card pf-card-hover p-5 flex flex-col">
               <div className="w-10 h-10 rounded-xl pf-chip flex items-center justify-center mb-4"><BookOpen size={20} /></div>
               <span className="text-xs uppercase tracking-wide text-[#db254f] font-semibold">{c.category || "Course"}</span>
-              <h3 className="font-bold text-lg mt-1">{c.title}</h3>
+              <h3 className="font-bold text-2xl md:text-3xl mt-1">{c.title}</h3>
               <p className="text-sm pf-muted mt-2 flex-grow line-clamp-2">{c.description}</p>
               <div className="flex items-center justify-between mt-4">
                 <div className="flex items-center gap-1.5 text-xs pf-faint"><Clock size={13} /> {c.duration || "Self-paced"}</div>
@@ -95,7 +95,7 @@ export default function MyCoursesPage() {
       {/* ── Explore & purchase ── */}
       <div className="flex items-center gap-2 mt-10 mb-4">
         <Compass size={20} className="text-[#db254f]" />
-        <h2 className="text-2xl font-bold">Explore Courses</h2>
+        <h2 className="text-2xl md:text-3xl font-bold">Explore Courses</h2>
       </div>
       <p className="pf-muted -mt-2 mb-4">Discover more programs and enroll instantly.</p>
 
@@ -112,7 +112,7 @@ export default function MyCoursesPage() {
               <CourseThumb src={c.image} alt={c.title} />
               <div className="p-5 flex flex-col flex-grow">
                 <span className="text-xs uppercase tracking-wide text-[#db254f] font-semibold">{c.category || "Course"}</span>
-                <h3 className="font-bold text-lg mt-1">{c.title}</h3>
+                <h3 className="font-bold text-2xl md:text-3xl mt-1">{c.title}</h3>
                 <p className="text-sm pf-muted mt-2 flex-grow line-clamp-2">{c.description}</p>
                 <div className="flex items-center justify-between mt-4">
                   {c.price ? <span className="text-lg font-extrabold">{priceLabel(c.price)}</span> : <span className="text-sm pf-faint">Free</span>}
@@ -142,7 +142,7 @@ export default function MyCoursesPage() {
         <>
           <div className="flex items-center gap-2 mt-10 mb-4">
             <Sparkles size={20} className="text-[#db254f]" />
-            <h2 className="text-2xl font-bold">Workshops</h2>
+            <h2 className="text-2xl md:text-3xl font-bold">Workshops</h2>
           </div>
           <p className="pf-muted -mt-2 mb-4">Hands-on live workshops — reserve your seat.</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -151,7 +151,7 @@ export default function MyCoursesPage() {
                 <CourseThumb src={w.image} alt={w.title} />
                 <div className="p-5 flex flex-col flex-grow">
                   {w.category && <span className="text-xs uppercase tracking-wide text-[#db254f] font-semibold">{w.category}</span>}
-                  <h3 className="font-bold text-lg mt-1">{w.title}</h3>
+                  <h3 className="font-bold text-2xl md:text-3xl mt-1">{w.title}</h3>
                   {w.subtitle && <p className="text-sm pf-muted mt-2 flex-grow line-clamp-2">{w.subtitle}</p>}
                   <div className="mt-3 space-y-1.5 text-xs pf-faint">
                     {w.date && <div className="flex items-center gap-1.5"><Calendar size={13} className="text-[#db254f]" /> {w.date}{w.time ? ` · ${w.time}` : ""}</div>}
