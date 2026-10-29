@@ -369,7 +369,7 @@ function PerformanceCard({ results = [], loading }) {
                 strokeDasharray={C} strokeDashoffset={off} style={{ transition: "stroke-dashoffset 0.8s ease" }} />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-base font-extrabold leading-none">{avg}%</span>
+              <span className="font-extrabold leading-none" style={{ fontSize: "0.8rem" }}>{avg}%</span>
             </div>
           </div>
 

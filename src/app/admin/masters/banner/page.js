@@ -1,10 +1,15 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Upload, Trash2, Image as ImageIcon } from "lucide-react";
+import { Upload, Trash2, Image as ImageIcon, Eye, X } from "lucide-react";
 import AdminShell from "@/components/portal/AdminShell";
 import { useConfirm } from "@/components/portal/ConfirmDialog";
 import { cldUrl } from "@/lib/cldImage";
 import { apiFetch } from "@/lib/api";
+
+const fmtDate = (d) => {
+  try { return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); }
+  catch { return "—"; }
+};
 
 export default function BannerPage() {
   const confirmDialog = useConfirm();
@@ -16,6 +21,7 @@ export default function BannerPage() {
   const [fileName, setFileName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [viewing, setViewing] = useState(null); // banner shown in the view modal
 
   const load = () =>
     apiFetch("/api/banners", { cache: "no-store" })
@@ -98,7 +104,7 @@ export default function BannerPage() {
                 </label>
                 <span className="px-3 text-sm text-gray-400 truncate">{fileName || "No file chosen"}</span>
               </div>
-              <p className="text-sm text-gray-500 mt-2">Banner should be in given ratio; <b>1536 × 496</b></p>
+              <p className="text-sm text-gray-500 mt-2">Recommended size (ratio ~2.4:1); <b>1200 × 500</b> — keep key content centered.</p>
             </div>
 
             <button type="submit" disabled={saving}
@@ -110,13 +116,13 @@ export default function BannerPage() {
           {/* Right: live preview */}
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Preview</p>
-            <div className="rounded-xl border border-gray-200 bg-gray-50 overflow-hidden aspect-[1536/496] flex items-center justify-center">
+            <div className="rounded-xl border border-gray-200 bg-gray-50 overflow-hidden aspect-[12/5] flex items-center justify-center">
               {previewSrc ? (
                 <img src={previewSrc} alt="Banner preview" className="w-full h-full object-cover" />
               ) : (
                 <div className="text-center text-gray-400">
                   <ImageIcon size={30} className="mx-auto mb-2" />
-                  <p className="text-sm">Banner preview (1536 × 496)</p>
+                  <p className="text-sm">Banner preview (1200 × 500)</p>
                 </div>
               )}
             </div>
@@ -128,33 +134,96 @@ export default function BannerPage() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mt-6 p-5">
         <h3 className="font-bold text-gray-900 mb-4">Banners List</h3>
 
-        {loading ? (
-          <p className="text-gray-400">Loading…</p>
-        ) : banners.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-gray-200 p-10 text-center text-gray-400">
-            No banners uploaded yet.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            {banners.map((b) => (
-              <div key={b.id} className="relative rounded-xl border border-gray-200 overflow-hidden group">
-                <div className="aspect-[1536/496] bg-gray-50">
-                  <img src={cldUrl(b.image, { width: 800 })} alt="Banner" loading="lazy" decoding="async" className="w-full h-full object-cover" />
-                </div>
-                <div className="absolute top-2 right-2 flex items-center gap-2">
-                  <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${b.status === "Active" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
-                    {b.status}
-                  </span>
-                  <button onClick={() => remove(b.id)} title="Delete"
-                    className="w-8 h-8 rounded-full btn-pill bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow">
-                    <Trash2 size={15} />
-                  </button>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm table-fixed">
+            <thead className="text-gray-500 text-left bg-gray-50">
+              <tr>
+                {[
+                  { h: "Sr. No.", w: "w-[8%]" },
+                  { h: "Banner", w: "w-[24%]" },
+                  { h: "Status", w: "w-[15%]" },
+                  { h: "Added On", w: "w-[25%]" },
+                  { h: "Action", w: "w-[28%]" },
+                ].map((c, i, a) => (
+                  <th key={c.h} className={`py-3 px-4 font-semibold ${c.w} ${c.right ? "text-right" : ""} ${i === 0 ? "rounded-l-lg" : ""} ${i === a.length - 1 ? "rounded-r-lg" : ""}`}>{c.h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {loading ? (
+                <tr><td colSpan={5} className="py-8 text-center text-gray-400">Loading…</td></tr>
+              ) : banners.length === 0 ? (
+                <tr><td colSpan={5} className="py-10 text-center text-gray-400">No banners uploaded yet.</td></tr>
+              ) : (
+                banners.map((b, i) => (
+                  <tr key={b.id} className="hover:bg-gray-50">
+                    <td className="py-3 px-4 text-gray-700">{i + 1}</td>
+                    <td className="py-3 px-4">
+                      <button onClick={() => setViewing(b)} className="block w-28 rounded-lg overflow-hidden border border-gray-200 bg-gray-50 aspect-[12/5] hover:ring-2 hover:ring-[#db254f]/30 transition" title="View banner">
+                        <img src={cldUrl(b.image, { width: 300 })} alt="Banner" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                      </button>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`text-xs px-2.5 py-1 rounded-md font-medium ${b.status === "Active" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                        {b.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-gray-500">{fmtDate(b.createdAt)}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setViewing(b)} title="View"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 hover:border-[#db254f]/40 hover:text-[#db254f] text-gray-600 px-3 py-1.5 text-xs font-semibold transition">
+                          <Eye size={14} /> View
+                        </button>
+                        <button onClick={() => remove(b.id)} title="Delete"
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 transition">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <p className="text-sm text-gray-500 mt-4">Showing {banners.length} {banners.length === 1 ? "entry" : "entries"}</p>
+      </div>
+
+      {/* ---- View banner modal ---- */}
+      {viewing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setViewing(null)}>
+          <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg bg-rose-100 text-[#db254f] flex items-center justify-center"><ImageIcon size={16} /></span>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-sm leading-tight">Banner Preview</h3>
+                  <span className={`text-[11px] font-medium ${viewing.status === "Active" ? "text-emerald-600" : "text-gray-400"}`}>{viewing.status}</span>
                 </div>
               </div>
-            ))}
+              <button onClick={() => setViewing(null)} className="w-8 h-8 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 flex items-center justify-center transition" aria-label="Close"><X size={18} /></button>
+            </div>
+            <div className="p-4 bg-gray-50">
+              <div className="rounded-xl overflow-hidden border border-gray-200 aspect-[12/5] bg-white">
+                <img src={cldUrl(viewing.image, { width: 1200 })} alt="Banner" className="w-full h-full object-cover" />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-100">
+              <a href={cldUrl(viewing.image, { width: 1600 })} target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 hover:border-[#db254f]/40 hover:text-[#db254f] text-gray-600 px-3.5 py-2 text-sm font-semibold transition">
+                <Eye size={15} /> Open full size
+              </a>
+              <button onClick={() => { const id = viewing.id; setViewing(null); remove(id); }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white px-3.5 py-2 text-sm font-semibold transition">
+                <Trash2 size={15} /> Delete
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </AdminShell>
   );
 }
