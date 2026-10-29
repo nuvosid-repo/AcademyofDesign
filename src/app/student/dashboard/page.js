@@ -14,6 +14,7 @@ import {
   ImageIcon,
   CalendarDays,
   Trophy,
+  Activity,
 } from "lucide-react";
 import StudentShell from "@/components/portal/StudentShell";
 import { useSession } from "@/context/SessionContext";
@@ -320,6 +321,78 @@ function LearningTimeCard() {
   );
 }
 
+/* Performance overview — a COMPACT at-a-glance view of quiz performance: a small
+   average-score ring, pass rate / best / attempts, and a recent-scores trend, in
+   a single row. Derived from the dashboard's quiz results (no extra API call). */
+function PerformanceCard({ results = [], loading }) {
+  const quizzes = results.filter((r) => r.type !== "Assessment" && typeof r.percentage === "number");
+  const count = quizzes.length;
+  const avg = count ? Math.round(quizzes.reduce((n, r) => n + (r.percentage || 0), 0) / count) : 0;
+  const best = count ? Math.max(...quizzes.map((r) => r.percentage || 0)) : 0;
+  const passed = quizzes.filter((r) => r.passed).length;
+  const passRate = count ? Math.round((passed / count) * 100) : 0;
+  // results are newest-first; show the last up to 7 oldest→newest for the trend.
+  const recent = quizzes.slice(0, 7).reverse();
+
+  const level =
+    avg >= 85 ? { t: "Excellent", c: "#10b981" } :
+    avg >= 70 ? { t: "Strong",    c: "#db254f" } :
+    avg >= 50 ? { t: "Good",      c: "#f59e0b" } :
+                { t: "Keep going", c: "#6366f1" };
+
+  // Progress-ring geometry (small ring).
+  const R = 25, C = 2 * Math.PI * R, off = C * (1 - avg / 100);
+
+  return (
+    <div className="pf-card p-3.5">
+      <div className="flex items-center justify-between mb-2.5">
+        <h3 className="font-bold text-sm flex items-center gap-2"><Activity size={15} className="text-[#db254f]" /> Performance</h3>
+        {count > 0 && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: `${level.c}1f`, color: level.c }}>{level.t}</span>}
+      </div>
+
+      {loading ? (
+        <p className="pf-muted text-sm">Loading…</p>
+      ) : count === 0 ? (
+        <p className="pf-muted text-sm py-1.5">Complete a quiz to see your performance.</p>
+      ) : (
+        <div className="flex items-center gap-x-4 gap-y-2.5 flex-wrap">
+          {/* Average-score ring */}
+          <div className="relative shrink-0" style={{ width: 60, height: 60 }}>
+            <svg width="60" height="60" viewBox="0 0 60 60" className="-rotate-90">
+              <defs>
+                <linearGradient id="perfRing" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#db254f" /><stop offset="100%" stopColor="#e56b85" />
+                </linearGradient>
+              </defs>
+              <circle cx="30" cy="30" r={R} fill="none" stroke="rgba(var(--fg-rgb),0.10)" strokeWidth="6" />
+              <circle cx="30" cy="30" r={R} fill="none" stroke="url(#perfRing)" strokeWidth="6" strokeLinecap="round"
+                strokeDasharray={C} strokeDashoffset={off} style={{ transition: "stroke-dashoffset 0.8s ease" }} />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-base font-extrabold leading-none">{avg}%</span>
+            </div>
+          </div>
+
+          {/* Inline stats */}
+          <div className="flex items-center gap-4 text-sm">
+            <span><span className="pf-muted">Pass </span><b className="tabular-nums">{passRate}%</b></span>
+            <span><span className="pf-muted">Best </span><b className="tabular-nums">{best}%</b></span>
+            <span><span className="pf-muted">Attempts </span><b className="tabular-nums">{count}</b></span>
+          </div>
+
+          {/* Recent-scores trend */}
+          <div className="flex items-end gap-1.5 h-9 ml-auto" title={`${passed}/${count} passed`}>
+            {recent.map((r, i) => (
+              <div key={r.id || i} className="w-2 rounded-full transition-all" title={`${r.course || "Quiz"} · ${r.percentage}%`}
+                style={{ height: `${Math.max(3, (r.percentage / 100) * 30)}px`, background: r.passed ? "#db254f" : "rgba(var(--fg-rgb),0.18)" }} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function StudentDashboard() {
   const { user } = useSession();
   const [data, setData] = useState(null);
@@ -394,9 +467,10 @@ export default function StudentDashboard() {
         ))}
       </div>
 
-      {/* Learning time tracker */}
-      <div className="mt-3">
+      {/* Learning time + performance — compact, side by side */}
+      <div className="grid lg:grid-cols-2 gap-3 mt-3 items-stretch">
         <LearningTimeCard />
+        <PerformanceCard results={data?.results || []} loading={loading} />
       </div>
 
       {/* Row 3 — calendar (left) + stacked scores/classes (right), equal height */}
