@@ -5,6 +5,7 @@ import { offloadMedia } from "@/lib/cloudinary";
 import Course from "@/models/Course";
 import Assessment from "@/models/Assessment";
 import AssessmentResult from "@/models/AssessmentResult";
+import Enrollment from "@/models/Enrollment";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -96,6 +97,9 @@ export async function DELETE(request, { params }) {
     const ids = assessments.map((a) => a._id.toString());
     await AssessmentResult.deleteMany({ $or: [{ assessmentId: { $in: ids } }, { course: title }] });
     await Assessment.deleteMany({ course: title });
+    // Also drop enrollments for this course so students aren't left "enrolled"
+    // in a course that no longer exists (which would show stale dashboard data).
+    await Enrollment.deleteMany({ $or: [{ courseId: id }, { courseTitle: title }] });
   }
   return NextResponse.json({ success: true });
 }

@@ -8,7 +8,9 @@ import { apiFetch } from "@/lib/api";
 
 const hasSTT = () => typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
 
-// Warm-up questions the AI always asks first (admin's own questions follow).
+// Fallback warm-up questions — used ONLY when the admin added no interview
+// questions, so the interview is never empty. When the admin has set questions,
+// the AI asks exactly those (see the loader below).
 const DEFAULT_INTRO = [
   { question: "To begin, please introduce yourself and tell us a little about your background.", maxMarks: 5 },
   { question: "What interested you in this course, and what are your career goals?", maxMarks: 5 },
@@ -64,7 +66,10 @@ export default function AIInterviewPage() {
         const a = (d.assessments || []).find((x) => x.id === id);
         if (!a) { setErr("Assessment not found."); setPhase("error"); return; }
         if (!a.interviewEnabled) { setErr("This assessment has no live interview."); setPhase("error"); return; }
-        const qs = [...DEFAULT_INTRO, ...(a.interviewQuestions || [])];
+        // Ask the admin's own interview questions. Only if none were set do we
+        // fall back to the generic warm-ups, so the interview is never empty.
+        const adminQs = (a.interviewQuestions || []).filter((q) => (q.question || "").trim());
+        const qs = adminQs.length ? adminQs : DEFAULT_INTRO;
         questionsRef.current = qs;
         answersRef.current = new Array(qs.length).fill("");
         setAssessment(a);
@@ -365,41 +370,63 @@ export default function AIInterviewPage() {
   if (phase === "processing") return <Screen><div className="flex flex-col items-center gap-3"><Loader2 className="animate-spin text-[#db254f]" size={30} /><p className="pf-muted text-sm">{procMsg}</p></div></Screen>;
 
   /* ── Done ── */
-  if (phase === "done") return (
+  if (phase === "done") {
+    const pct = result?.graded && result.interviewTotal
+      ? Math.round((result.interviewScore / result.interviewTotal) * 100) : 0;
+    return (
     <div className="pf-page min-h-screen p-4 sm:p-8">
       <div className="max-w-2xl mx-auto">
-        <div className="pf-card p-6 sm:p-8 text-center">
+        <div className="pf-card p-7 sm:p-9 text-center">
           <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-500" style={{ background: "rgba(16,185,129,0.15)" }}><CheckCircle2 size={30} /></div>
-          <h2 className="text-2xl font-extrabold">Interview complete 🎉</h2>
+          <h2 className="text-2xl md:text-3xl font-extrabold">Interview complete 🎉</h2>
           <p className="pf-muted mt-2 text-sm">Your responses were recorded and {result?.graded ? "scored by AI" : "submitted"}.</p>
+
+          {/* AI score */}
           {result?.graded && (
-            <div className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-full" style={{ background: "rgba(219,37,79,0.1)" }}>
-              <Bot size={16} className="text-[#db254f]" /> <span className="font-bold">AI Interview score: {result.interviewScore}/{result.interviewTotal}</span>
+            <div className="mt-6 rounded-2xl p-5 flex items-center justify-center gap-4" style={{ background: "rgba(219,37,79,0.08)", border: "1px solid rgba(219,37,79,0.20)" }}>
+              <span className="w-12 h-12 rounded-full flex items-center justify-center text-white shrink-0" style={{ background: "linear-gradient(135deg,#db254f,#e56b85)" }}><Bot size={22} /></span>
+              <div className="text-left">
+                <p className="text-xs font-semibold uppercase tracking-wide pf-faint">AI Interview Score</p>
+                <p className="text-3xl font-extrabold leading-tight">{result.interviewScore}<span className="text-lg pf-muted font-semibold">/{result.interviewTotal}</span> <span className="text-base pf-muted font-semibold">· {pct}%</span></p>
+              </div>
             </div>
           )}
+
+          {/* Recording */}
           {videoUrl && (
-            <div className="mt-6 text-left">
-              <div className="text-xs font-bold uppercase tracking-wide pf-faint mb-2 flex items-center gap-1.5"><Video size={13} className="text-[#db254f]" /> Your recording</div>
-              <video src={videoUrl} controls className="w-full rounded-xl border pf-border bg-black" />
-              <p className="text-[11px] pf-faint mt-1.5">Saved — your interviewer can review this recording in the admin panel.</p>
+            <div className="mt-7 text-left">
+              <div className="text-xs font-bold uppercase tracking-wide pf-faint mb-2.5 flex items-center gap-1.5"><Video size={13} className="text-[#db254f]" /> Your recording</div>
+              <video src={videoUrl} controls className="w-full rounded-2xl border pf-border bg-black" />
+              <p className="text-[11px] pf-faint mt-2">Saved — your interviewer can review this recording in the admin panel.</p>
             </div>
           )}
+
+          {/* Per-question breakdown */}
           {result?.breakdown?.length > 0 && (
-            <div className="mt-6 text-left space-y-2">
-              <div className="text-xs font-bold uppercase tracking-wide pf-faint mb-1">Breakdown</div>
-              {result.breakdown.map((b, i) => (
-                <div key={i} className="rounded-xl border pf-border p-3">
-                  <div className="flex items-center justify-between gap-2"><span className="text-sm font-semibold truncate">Q{i + 1}. {b.question}</span><span className="text-sm font-bold shrink-0">{b.marks}/{b.maxMarks}</span></div>
-                  {b.feedback && <p className="text-xs pf-muted mt-1"><b>AI:</b> {b.feedback}</p>}
-                </div>
-              ))}
+            <div className="mt-7 text-left">
+              <div className="text-xs font-bold uppercase tracking-wide pf-faint mb-2.5">Breakdown</div>
+              <div className="space-y-2.5">
+                {result.breakdown.map((b, i) => (
+                  <div key={i} className="rounded-2xl border pf-border p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-sm font-semibold">Q{i + 1}. {b.question}</span>
+                      <span className="text-sm font-extrabold shrink-0 px-2.5 py-1 rounded-lg pf-chip">{b.marks}/{b.maxMarks}</span>
+                    </div>
+                    {b.feedback && <p className="text-xs pf-muted mt-2 leading-relaxed flex gap-1.5"><Bot size={13} className="text-[#db254f] shrink-0 mt-0.5" /><span>{b.feedback}</span></p>}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-          <button onClick={() => router.push("/student/assessments")} className="btn-pill mt-6 inline-flex items-center gap-1.5 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-5 py-2.5 transition"><ArrowLeft size={14} /> Back to Assessments</button>
+
+          <div className="mt-8 pt-6 border-t pf-border">
+            <button onClick={() => router.push("/student/assessments")} className="btn-pill w-full sm:w-auto inline-flex items-center justify-center gap-1.5 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-6 py-3 transition"><ArrowLeft size={15} /> Back to Assessments</button>
+          </div>
         </div>
       </div>
     </div>
-  );
+    );
+  }
 
   /* ── Live interview — immersive panel, voice only (no question text) ── */
   const listening = status === "listening";

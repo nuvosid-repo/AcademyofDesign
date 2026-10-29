@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   HelpCircle, FileText, CheckCircle2, ArrowRight, ArrowLeft, Clock,
-  ShieldAlert, Loader2, ClipboardCheck, Ban, RefreshCw, Camera, Eye,
+  ShieldAlert, Loader2, ClipboardCheck, Ban, RefreshCw, Camera, Eye, Bot,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { uploadBlob } from "@/lib/uploadClient";
@@ -262,7 +262,7 @@ export default function ExamPage() {
       <div className="pf-card p-8 text-center">
         <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 text-emerald-500" style={{ background: "rgba(16,185,129,0.15)" }}><CheckCircle2 size={26} /></div>
         <h2 className="text-xl font-extrabold">Exam already completed</h2>
-        <p className="pf-muted mt-2 text-sm">You have already submitted this assessment. You can now proceed to the live interview from the Assessments page.</p>
+        <p className="pf-muted mt-2 text-sm">You have already submitted this assessment. You can now proceed to the AI interview from the Assessments page.</p>
         <button onClick={() => router.push("/student/assessments")} className="btn-pill mt-5 inline-flex items-center gap-1.5 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-5 py-2.5 transition"><ArrowLeft size={14} /> Back to Assessments</button>
       </div>
     </Screen>
@@ -332,55 +332,84 @@ export default function ExamPage() {
   /* ── Done ── */
   if (phase === "done") return (
     <Screen narrow>
-      <div className="pf-card p-8 text-center">
+      <div className="pf-card p-7 sm:p-9 text-center">
         <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-500" style={{ background: "rgba(16,185,129,0.15)" }}><CheckCircle2 size={30} /></div>
-        <h2 className="text-2xl font-extrabold">Exam submitted 🎉</h2>
+        <h2 className="text-2xl md:text-3xl font-extrabold">Exam submitted 🎉</h2>
         <p className="pf-muted mt-2 text-sm">Your responses have been recorded.</p>
         {warnings >= MAX_TAB_WARNINGS && (
-          <div className="mt-4 rounded-xl px-4 py-3 text-sm text-left flex items-start gap-2.5" style={{ background: "rgba(244,63,94,0.12)", border: "1px solid rgba(244,63,94,0.30)" }}>
+          <div className="mt-5 rounded-xl px-4 py-3 text-sm text-left flex items-start gap-2.5" style={{ background: "rgba(244,63,94,0.12)", border: "1px solid rgba(244,63,94,0.30)" }}>
             <ShieldAlert size={17} className="text-rose-500 shrink-0 mt-0.5" />
             <span className="pf-muted">Your exam was <b style={{ color: "var(--fg)" }}>submitted automatically</b> because you left the exam tab {warnings} times. This has been recorded and shared with the admin.</span>
           </div>
         )}
-        <div className="grid gap-3 mt-6 text-left">
+
+        {/* Section scores */}
+        <div className="grid gap-3 mt-7 text-left">
           {assessment.mcqEnabled && mcqResult && (
-            <div className="rounded-xl border pf-border p-4 flex items-center justify-between">
-              <span className="text-sm font-semibold flex items-center gap-2"><HelpCircle size={15} className="text-[#db254f]" /> MCQ Score</span>
-              <span className="text-lg font-extrabold">{mcqResult.percentage}% <span className="text-sm pf-muted font-medium">({mcqResult.score}/{mcqResult.total})</span></span>
+            <div className="rounded-2xl border pf-border p-4 sm:p-5 flex items-center justify-between gap-3">
+              <span className="flex items-center gap-3 min-w-0">
+                <span className="w-11 h-11 rounded-xl pf-chip flex items-center justify-center shrink-0"><HelpCircle size={19} className="text-[#db254f]" /></span>
+                <span className="flex flex-col min-w-0">
+                  <span className="text-sm font-bold">MCQ Score</span>
+                  <span className="text-xs pf-faint">Auto-scored</span>
+                </span>
+              </span>
+              <span className="text-right shrink-0">
+                <span className="block text-2xl font-extrabold leading-none">{mcqResult.percentage}%</span>
+                <span className="block text-xs pf-muted font-medium mt-1">{mcqResult.score}/{mcqResult.total} correct</span>
+              </span>
             </div>
           )}
           {assessment.writtenEnabled && (
-            <div className="rounded-xl border pf-border p-4 flex items-center justify-between">
-              <span className="text-sm font-semibold flex items-center gap-2"><FileText size={15} className="text-[#db254f]" /> Written Exam</span>
+            <div className="rounded-2xl border pf-border p-4 sm:p-5 flex items-center justify-between gap-3">
+              <span className="flex items-center gap-3 min-w-0">
+                <span className="w-11 h-11 rounded-xl pf-chip flex items-center justify-center shrink-0"><FileText size={19} className="text-[#db254f]" /></span>
+                <span className="flex flex-col min-w-0">
+                  <span className="text-sm font-bold">Written Exam</span>
+                  <span className="text-xs pf-faint">{writtenResult?.aiGraded ? "AI graded" : "Grading in progress"}</span>
+                </span>
+              </span>
               {writtenResult?.aiGraded ? (
-                <span className="text-sm font-bold">{writtenResult.writtenScore}/{writtenResult.writtenTotal} <span className="text-xs pf-muted font-medium">· AI graded</span></span>
+                <span className="text-right shrink-0">
+                  <span className="block text-2xl font-extrabold leading-none">{writtenResult.writtenScore}<span className="text-base pf-muted font-semibold">/{writtenResult.writtenTotal}</span></span>
+                  <span className="block text-xs pf-muted font-medium mt-1">marks</span>
+                </span>
               ) : (
-                <span className="text-sm text-amber-500 font-medium inline-flex items-center gap-1"><Clock size={13} /> Awaiting grading</span>
+                <span className="text-sm text-amber-500 font-medium inline-flex items-center gap-1 shrink-0"><Clock size={14} /> Awaiting</span>
               )}
             </div>
           )}
           {assessment.interviewEnabled && (
-            <div className="rounded-xl p-4 text-sm pf-muted" style={{ background: "rgba(99,102,241,0.10)" }}>
-              Next step: a <span className="font-semibold" style={{ color: "var(--fg)" }}>live interview</span>. Join it from the Assessments page when you are ready.
+            <div className="rounded-2xl p-4 sm:p-5 flex items-start gap-3 text-left" style={{ background: "rgba(99,102,241,0.10)", border: "1px solid rgba(99,102,241,0.22)" }}>
+              <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(99,102,241,0.18)" }}><Bot size={19} style={{ color: "#6366f1" }} /></span>
+              <div className="min-w-0">
+                <p className="text-sm font-bold" style={{ color: "var(--fg)" }}>Next step: AI Interview</p>
+                <p className="text-xs pf-muted mt-1 leading-relaxed">Start it from the Assessments page whenever you&apos;re ready — the AI asks each question aloud and scores your spoken answers.</p>
+              </div>
             </div>
           )}
         </div>
+
         {/* MCQ-only exams know pass/fail immediately → offer retry here. */}
         {assessment.mcqEnabled && !assessment.writtenEnabled && !assessment.interviewEnabled && mcqResult && !mcqResult.passed && assessment.setBEnabled && (assessment.attempt || 1) < 2 && (
-          <div className="mt-5 rounded-xl p-4 text-left" style={{ background: "rgba(245,158,11,0.10)" }}>
+          <div className="mt-4 rounded-2xl p-4 sm:p-5 text-left" style={{ background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.22)" }}>
             <p className="text-sm font-semibold text-amber-600">You didn&apos;t pass this time.</p>
             <p className="text-xs pf-muted mt-1">You get one more attempt with a different set of questions (Set B).</p>
             <button onClick={doRetry} disabled={submitting} className="btn-pill mt-3 inline-flex items-center gap-1.5 text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 transition disabled:opacity-60"><RefreshCw size={15} /> {submitting ? "Starting…" : "Retry with Set B"}</button>
           </div>
         )}
+
         {/* When written/interview are involved, pass/fail is the combined score
             decided after grading — tell the student to check back. */}
         {(assessment.writtenEnabled || assessment.interviewEnabled) && (
-          <div className="mt-5 rounded-xl p-4 text-left text-sm pf-muted" style={{ background: "rgba(var(--fg-rgb),0.04)" }}>
+          <div className="mt-4 rounded-2xl p-4 sm:p-5 text-left text-xs sm:text-sm pf-muted leading-relaxed" style={{ background: "rgba(var(--fg-rgb),0.04)" }}>
             Your final result is the <span className="font-semibold" style={{ color: "var(--fg)" }}>combined score</span> of all sections (pass ≥ {assessment.passingScore}%). It appears on the Assessments page once your written{assessment.interviewEnabled ? " and interview" : ""} {assessment.interviewEnabled ? "are" : "is"} graded — and you can retry with Set B there if you don&apos;t pass.
           </div>
         )}
-        <button onClick={() => router.push("/student/assessments")} className="btn-pill mt-6 inline-flex items-center gap-1.5 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-5 py-2.5 transition"><ArrowLeft size={14} /> Back to Assessments</button>
+
+        <div className="mt-8 pt-6 border-t pf-border">
+          <button onClick={() => router.push("/student/assessments")} className="btn-pill w-full sm:w-auto inline-flex items-center justify-center gap-1.5 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-6 py-3 transition"><ArrowLeft size={15} /> Back to Assessments</button>
+        </div>
       </div>
     </Screen>
   );

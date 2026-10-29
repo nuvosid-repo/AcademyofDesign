@@ -44,6 +44,10 @@ export async function GET(request) {
 
   const courseIds = new Set(enrollments.map((e) => e.courseId).filter(Boolean));
   const courseTitles = new Set(enrollments.map((e) => e.courseTitle).filter(Boolean));
+  // Titles of courses that still exist. A deleted course can leave behind
+  // enrollments and quiz/assessment results (orphans) — we use this to drop
+  // their scores so the dashboard never shows a course that no longer exists.
+  const existingCourseTitles = new Set(allCourses.map((c) => c.title).filter(Boolean));
 
   // Enrolled course cards
   const courses = allCourses
@@ -94,6 +98,8 @@ export async function GET(request) {
   const seen = new Set();
   const results = [];
   for (const r of allResults) {
+    // Skip scores for a course that no longer exists (orphaned result rows).
+    if (r.course && !existingCourseTitles.has(r.course)) continue;
     const key = r.assessmentId || (r._id && r._id.toString()) || r.id;
     if (seen.has(key)) continue;
     seen.add(key);

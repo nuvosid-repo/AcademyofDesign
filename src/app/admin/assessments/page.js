@@ -4,7 +4,6 @@ import { Pencil, Trash2, ClipboardCheck, Plus, Check, HelpCircle, FileText, User
 import Link from "next/link";
 import AdminShell from "@/components/portal/AdminShell";
 import { useConfirm } from "@/components/portal/ConfirmDialog";
-import { DatePicker, TimePicker } from "@/components/portal/DateTimePicker";
 import { apiFetch } from "@/lib/api";
 
 const STATUSES = ["Active", "Inactive"];
@@ -417,25 +416,22 @@ export default function AssessmentsPage() {
           {/* ── Live interview ── */}
           <div className="rounded-2xl border border-gray-200 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
-              <span className="font-bold text-gray-900 flex items-center gap-2"><Users size={17} className="text-[#db254f]" /> Live Interview <span className="text-xs font-normal text-gray-400">(interviewer-graded)</span></span>
+              <span className="font-bold text-gray-900 flex items-center gap-2"><Users size={17} className="text-[#db254f]" /> AI Interview <span className="text-xs font-normal text-gray-400">(AI-graded)</span></span>
               <Toggle on={form.interviewEnabled} onClick={() => set("interviewEnabled", !form.interviewEnabled)} />
             </div>
             {form.interviewEnabled && (
               <div className="p-4 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                  <div><label className={label}>Date</label><DatePicker value={form.interviewDate} onChange={(v) => set("interviewDate", v)} /></div>
-                  <div><label className={label}>Time</label><TimePicker value={form.interviewTime} onChange={(v) => set("interviewTime", v)} /></div>
-                  <div><label className={label}>Interviewer</label><input className={field} value={form.interviewer} onChange={(e) => set("interviewer", e.target.value)} /></div>
-                  <div><label className={label}>Google Meet Link</label><input className={field} placeholder="https://meet.google.com/…" value={form.interviewLink} onChange={(e) => set("interviewLink", e.target.value)} /></div>
-                </div>
+                <p className="text-xs text-gray-600 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2.5">
+                  The AI conducts this interview — it reads each question below aloud to the student, records their spoken answer, and scores it within its max marks. No date, time or Google Meet link is needed.
+                </p>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-700">Interview Questions <span className="text-xs font-normal text-gray-400">(interviewer scores each within max marks)</span></span>
+                  <span className="text-sm font-semibold text-gray-700">Interview Questions <span className="text-xs font-normal text-gray-400">(the AI asks each and scores it within max marks)</span></span>
                   <button type="button" onClick={() => addMarked(iKey)} className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-full btn-pill bg-[#db254f] hover:bg-[#b91d40] text-white px-4 py-2 transition"><Plus size={15} /> Add Question</button>
                 </div>
                 {(form[iKey] || []).map((q, i) => (
                   <div key={i} className="flex flex-col sm:flex-row gap-3 items-start">
                     <span className="w-6 h-6 rounded-full bg-rose-100 text-[#db254f] text-xs font-bold flex items-center justify-center shrink-0 mt-2.5">{i + 1}</span>
-                    <textarea rows={2} className={`${field} resize-y`} placeholder="e.g. Rate the candidate's spoken English / IQ …" value={q.question} onChange={(e) => setMarked(iKey, i, "question", e.target.value)} />
+                    <textarea rows={2} className={`${field} resize-y`} placeholder="e.g. Walk me through how you would set out a building's foundation on site…" value={q.question} onChange={(e) => setMarked(iKey, i, "question", e.target.value)} />
                     <div className="flex items-center gap-2 shrink-0">
                       <label className="text-xs text-gray-500">Max</label>
                       <input type="number" min={0} className="w-20 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-2.5 text-sm outline-none" value={q.maxMarks} onChange={(e) => setMarked(iKey, i, "maxMarks", e.target.value)} />
