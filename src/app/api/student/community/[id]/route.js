@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveUseMock } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import CommunityPost from "@/models/CommunityPost";
+import { authorImages } from "@/lib/communityAuthors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,8 @@ const toThread = (p, meId) => ({
   authorName: p.authorName,
   authorId: p.authorId,
   isMine: !!meId && p.authorId === meId,
+  likes: (p.likedBy || []).length,
+  liked: !!meId && (p.likedBy || []).includes(meId),
   createdAt: p.createdAt,
   comments: (p.comments || []).map((c) => ({
     id: (c._id && c._id.toString()) || c.id,
@@ -27,9 +30,19 @@ const toThread = (p, meId) => ({
     authorId: c.authorId,
     isMine: !!meId && c.authorId === meId,
     body: c.body,
+    likes: (c.likedBy || []).length,
+    liked: !!meId && (c.likedBy || []).includes(meId),
     createdAt: c.createdAt,
   })),
 });
+
+// Attach each author's current profile image (question + every answer).
+async function withImages(thread, useMock) {
+  const imgs = await authorImages([thread.authorId, ...thread.comments.map((c) => c.authorId)], useMock);
+  thread.authorImage = imgs[thread.authorId] || "";
+  thread.comments.forEach((c) => { c.authorImage = imgs[c.authorId] || ""; });
+  return thread;
+}
 
 // GET — one question with all its answers.
 export async function GET(request, { params }) {
@@ -42,7 +55,7 @@ export async function GET(request, { params }) {
     ? mockStore().find((p) => pid(p) === id)
     : await CommunityPost.findById(id).lean().catch(() => null);
   if (!post) return NextResponse.json({ error: "Question not found" }, { status: 404 });
-  return NextResponse.json({ post: toThread(post, auth.id) });
+  return NextResponse.json({ post: await withImages(toThread(post, auth.id), useMock) });
 }
 
 // POST — add an answer (comment) to a question.
@@ -59,16 +72,16 @@ export async function POST(request, { params }) {
     if (!post) return NextResponse.json({ error: "Question not found" }, { status: 404 });
     post.comments.push({
       _id: "mc_" + Date.now() + Math.random().toString(36).slice(2, 6),
-      authorId: auth.id, authorName: auth.name || "Student", body, createdAt: new Date(),
+      authorId: auth.id, authorName: auth.name || "Student", body, likedBy: [], createdAt: new Date(),
     });
-    return NextResponse.json({ post: toThread(post, auth.id) }, { status: 201 });
+    return NextResponse.json({ post: await withImages(toThread(post, auth.id), useMock) }, { status: 201 });
   }
 
   const post = await CommunityPost.findById(id).catch(() => null);
   if (!post) return NextResponse.json({ error: "Question not found" }, { status: 404 });
   post.comments.push({ authorId: auth.id, authorName: auth.name || "Student", body });
   await post.save();
-  return NextResponse.json({ post: toThread(post.toObject(), auth.id) }, { status: 201 });
+  return NextResponse.json({ post: await withImages(toThread(post.toObject(), auth.id), useMock) }, { status: 201 });
 }
 
 // DELETE — remove your own answer (?commentId=…) or your own question.
@@ -88,7 +101,7 @@ export async function DELETE(request, { params }) {
       if (!c) return NextResponse.json({ error: "Answer not found" }, { status: 404 });
       if (c.authorId !== auth.id) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
       post.comments = post.comments.filter((x) => x !== c);
-      return NextResponse.json({ post: toThread(post, auth.id) });
+      return NextResponse.json({ post: await withImages(toThread(post, auth.id), useMock) });
     }
     if (post.authorId !== auth.id) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
     const i = store.indexOf(post);
@@ -104,7 +117,7 @@ export async function DELETE(request, { params }) {
     if (c.authorId !== auth.id) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
     c.deleteOne();
     await post.save();
-    return NextResponse.json({ post: toThread(post.toObject(), auth.id) });
+    return NextResponse.json({ post: await withImages(toThread(post.toObject(), auth.id), useMock) });
   }
   if (post.authorId !== auth.id) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   await post.deleteOne();

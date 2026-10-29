@@ -29,10 +29,23 @@ export async function GET(request) {
   if (auth.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const useMock = await resolveUseMock();
-  if (useMock) return NextResponse.json({ enrollments: mockEnrollments().map(serialize) });
+  // Only surface enrollments whose course still exists — a deleted course can
+  // leave orphan enrollment rows that should no longer appear anywhere.
+  if (useMock) {
+    const titles = new Set(mockCourses().map((c) => c.title).filter(Boolean));
+    const ids = new Set(mockCourses().map((c) => (c._id && c._id.toString()) || c.id).filter(Boolean));
+    const live = mockEnrollments().filter((e) => (e.courseTitle && titles.has(e.courseTitle)) || (e.courseId && ids.has(String(e.courseId))));
+    return NextResponse.json({ enrollments: live.map(serialize) });
+  }
 
-  const docs = await Enrollment.find().sort({ createdAt: -1 }).lean();
-  return NextResponse.json({ enrollments: docs.map(serialize) });
+  const [docs, courses] = await Promise.all([
+    Enrollment.find().sort({ createdAt: -1 }).lean(),
+    Course.find().select("title").lean(),
+  ]);
+  const titles = new Set(courses.map((c) => c.title).filter(Boolean));
+  const ids = new Set(courses.map((c) => c._id.toString()));
+  const live = docs.filter((e) => (e.courseTitle && titles.has(e.courseTitle)) || (e.courseId && ids.has(String(e.courseId))));
+  return NextResponse.json({ enrollments: live.map(serialize) });
 }
 
 // POST /api/enrollments — records an enrollment after a successful payment.

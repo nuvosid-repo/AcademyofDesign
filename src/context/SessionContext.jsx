@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { apiFetch, clearToken, getToken, onAuthChange } from "@/lib/api";
 
 const SessionContext = createContext(null);
@@ -9,6 +9,10 @@ const SessionContext = createContext(null);
 export function SessionProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Mirrors `user` so the auth-change listener (a stable closure) can tell a
+  // fresh login (no user yet) from a token rotation / periodic re-check.
+  const userRef = useRef(null);
+  useEffect(() => { userRef.current = user; }, [user]);
 
   // `silent` background checks never toggle `loading`, so periodic re-validation
   // doesn't flash the portal's loading screen (which would remount the page).
@@ -29,7 +33,11 @@ export function SessionProvider({ children }) {
 
   useEffect(() => {
     refresh();                                   // initial: shows the loading state
-    const off = onAuthChange(() => refresh(true)); // token change: silent
+    // Token changed: when a user is already signed in (token rotation / silent
+    // periodic re-check) keep it silent to avoid a flicker; on a FRESH login
+    // (no user yet) run a visible check so route guards wait for it to resolve
+    // instead of bouncing to the login page before the new user is known.
+    const off = onAuthChange(() => refresh(!!userRef.current));
     // Re-validate periodically (single active session) — silent, no flicker.
     const iv = setInterval(() => { if (getToken()) refresh(true); }, 45_000);
     return () => { off(); clearInterval(iv); };

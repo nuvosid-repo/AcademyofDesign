@@ -26,10 +26,7 @@ const NAV = [
       { href: "/admin/masters/instructors", label: "Instructors" },
     ],
   },
-  {
-    label: "Course", icon: BookOpen,
-    children: [{ href: "/admin/manage-courses", label: "All Courses" }],
-  },
+  { href: "/admin/manage-courses", label: "Course", icon: BookOpen },
   { href: "/admin/live-classes", label: "Live Class", icon: ClipboardList },
   {
     label: "Workshop", icon: Presentation,
@@ -39,10 +36,7 @@ const NAV = [
     ],
   },
   { href: "/admin/assessments", label: "Assessment", icon: ClipboardCheck },
-  {
-    label: "Student", icon: Users,
-    children: [{ href: "/admin/manage-students", label: "All Students" }],
-  },
+  { href: "/admin/manage-students", label: "Student", icon: Users },
   { href: "/admin/resumes", label: "Resume", icon: FileText },
   { href: "/admin/transactions", label: "All Transactions", icon: CreditCard },
 ];

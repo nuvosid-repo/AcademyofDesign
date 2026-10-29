@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveUseMock } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import CommunityPost from "@/models/CommunityPost";
+import { authorImages } from "@/lib/communityAuthors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +22,8 @@ const toCard = (p, meId) => ({
   authorId: p.authorId,
   isMine: !!meId && p.authorId === meId,
   answers: (p.comments || []).length,
+  likes: (p.likedBy || []).length,
+  liked: !!meId && (p.likedBy || []).includes(meId),
   createdAt: p.createdAt,
 });
 
@@ -30,13 +33,15 @@ export async function GET(request) {
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const useMock = await resolveUseMock();
-  if (useMock) {
-    const posts = [...mockStore()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    return NextResponse.json({ posts: posts.map((p) => toCard(p, auth.id)) });
-  }
+  const posts = useMock
+    ? [...mockStore()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    : await CommunityPost.find({}).sort({ createdAt: -1 }).limit(200).lean();
 
-  const posts = await CommunityPost.find({}).sort({ createdAt: -1 }).limit(200).lean();
-  return NextResponse.json({ posts: posts.map((p) => toCard(p, auth.id)) });
+  const cards = posts.map((p) => toCard(p, auth.id));
+  // Attach each author's current profile image (looked up live).
+  const imgs = await authorImages(cards.map((c) => c.authorId), useMock);
+  cards.forEach((c) => { c.authorImage = imgs[c.authorId] || ""; });
+  return NextResponse.json({ posts: cards });
 }
 
 // POST — ask a question.
@@ -54,7 +59,7 @@ export async function POST(request) {
     const post = {
       _id: "mock_" + Date.now() + Math.random().toString(36).slice(2, 8),
       authorId: auth.id, authorName: auth.name || "Student",
-      title: t, body: b, comments: [], createdAt: new Date(),
+      title: t, body: b, likedBy: [], comments: [], createdAt: new Date(),
     };
     mockStore().unshift(post);
     return NextResponse.json({ post: toCard(post, auth.id) }, { status: 201 });

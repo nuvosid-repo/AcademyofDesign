@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { resolveUseMock, mockStudents, mockEnrollments } from "@/lib/db";
+import { resolveUseMock, mockStudents, mockEnrollments, mockCourses } from "@/lib/db";
 import { getAuthUser, bcrypt } from "@/lib/auth";
 import { offloadMedia } from "@/lib/cloudinary";
 import Student from "@/models/Student";
 import Enrollment from "@/models/Enrollment";
+import Course from "@/models/Course";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,30 +38,39 @@ export async function GET(request) {
 
   const useMock = await resolveUseMock();
 
-  // Attach each student's paid enrollments (matched by student id or email).
+  // Titles of courses that STILL exist — a deleted course can leave behind
+  // enrollment rows (orphans), which must never show as "enrolled".
+  let existingTitles = new Set();
+
+  // Attach each student's paid enrollments (matched by student id or email),
+  // dropping any whose course no longer exists.
   const attachEnrollments = (students, enrollments) =>
     students.map((s) => {
       const mine = enrollments.filter(
         (e) => (e.studentId && e.studentId === s.id) || (e.studentEmail && s.email && e.studentEmail.toLowerCase() === s.email.toLowerCase())
       );
-      // Unique course titles the student enrolled in.
-      const titles = [...new Set(mine.map((e) => e.courseTitle).filter(Boolean))];
+      // Unique titles the student enrolled in, limited to courses that exist.
+      const titles = [...new Set(mine.map((e) => e.courseTitle).filter(Boolean))]
+        .filter((t) => existingTitles.has(t));
       return { ...s, enrolledCount: titles.length, enrolledCourses: titles };
     });
 
   if (useMock) {
+    existingTitles = new Set(mockCourses().map((c) => c.title).filter(Boolean));
     const students = mockStudents().map(serialize);
     return NextResponse.json({ students: attachEnrollments(students, mockEnrollments()) });
   }
 
   // Exclude the heavy identityProof base64 from the list — it loads on view/edit
   // via GET /:id. (Avatar `image` stays so the table thumbnails still show.)
-  // Run both reads in parallel; the list never needs identityProof/password,
-  // and base64 avatars are stripped in serialize() so the payload stays small.
-  const [docs, enr] = await Promise.all([
+  // Run reads in parallel; the list never needs identityProof/password, and
+  // base64 avatars are stripped in serialize() so the payload stays small.
+  const [docs, enr, courses] = await Promise.all([
     Student.find().select("-identityProof -password").sort({ createdAt: -1 }).lean(),
     Enrollment.find().select("studentId studentEmail courseTitle").lean(),
+    Course.find().select("title").lean(),
   ]);
+  existingTitles = new Set(courses.map((c) => c.title).filter(Boolean));
   return NextResponse.json({ students: attachEnrollments(docs.map(serialize), enr) });
 }
 
