@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { Eye, EyeOff } from "lucide-react";
 import { apiFetch, setToken } from "@/lib/api";
 
 // Reusable login card for the portals.
@@ -16,6 +17,7 @@ export default function PortalLogin({ brand, requiredRole, redirectTo, hint, var
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [expired, setExpired] = useState(false);
+  const [showPw, setShowPw] = useState(false);
   const light = variant === "light";
 
   // Show a notice when redirected here after an idle-timeout session expiry.
@@ -121,11 +123,21 @@ export default function PortalLogin({ brand, requiredRole, redirectTo, hint, var
 
           <div className="space-y-1.5">
             <label className={`text-xs font-semibold uppercase tracking-wide ${t.label}`}>Password</label>
-            <input
-              type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
-              className={`w-full rounded-xl border px-4 py-3 text-sm outline-none transition ${t.input}`}
-              placeholder="••••••••"
-            />
+            <div className="relative">
+              <input
+                type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required
+                className={`w-full rounded-xl border px-4 py-3 pr-11 text-sm outline-none transition ${t.input}`}
+                placeholder="••••••••"
+              />
+              <button
+                type="button" onClick={() => setShowPw((s) => !s)} tabIndex={-1}
+                aria-label={showPw ? "Hide password" : "Show password"}
+                title={showPw ? "Hide password" : "Show password"}
+                className={`absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-lg transition ${light ? "text-gray-400 hover:text-gray-700 hover:bg-gray-100" : "text-neutral-400 hover:text-white hover:bg-white/10"}`}
+              >
+                {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
+              </button>
+            </div>
           </div>
 
           <button
