@@ -397,6 +397,7 @@ export default function StudentDashboard() {
   const { user } = useSession();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [scoreTab, setScoreTab] = useState(0); // selected course tab in "My Scores"
 
   useEffect(() => {
     apiFetch("/api/student/dashboard", { cache: "no-store" })
@@ -492,19 +493,91 @@ export default function StudentDashboard() {
                 </div>
                 {loading ? (
                   <p className="pf-muted text-sm">Loading…</p>
-                ) : qr.length ? (
-                  <div className="space-y-2 max-h-[236px] overflow-y-auto pf-scroll pr-1 -mr-1">
-                    {qr.map((r) => (
-                      <div key={r.id} className="flex items-center justify-between gap-2 rounded-xl border pf-border p-2.5">
-                        <span className="text-xs pf-muted truncate min-w-0">{r.course || "Quiz"}</span>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-lg font-extrabold">{r.percentage}%</span>
-                          <span className={`text-[11px] px-2 py-0.5 rounded-md font-medium ${r.passed ? "bg-emerald-500/15 text-emerald-500" : "bg-rose-500/15 text-rose-500"}`}>{r.passed ? "Pass" : "Fail"}</span>
+                ) : qr.length ? (() => {
+                  // Group scores by course; a tab per course keeps the card a fixed
+                  // height no matter how many courses the student has.
+                  const groups = []; const gi = {};
+                  qr.forEach((r) => { const k = r.course || "Other"; if (gi[k] == null) { gi[k] = groups.length; groups.push({ course: k, items: [] }); } groups[gi[k]].items.push(r); });
+                  const typeMeta = (t) => t === "Written" ? { label: "Written", c: "#d97706", bg: "rgba(245,158,11,0.14)" }
+                    : t === "Interview" ? { label: "Interview", c: "#0d9488", bg: "rgba(13,148,136,0.14)" }
+                    : { label: "Quiz", c: "#db254f", bg: "rgba(219,37,79,0.12)" };
+                  const ai = Math.min(scoreTab, groups.length - 1);
+                  const g = groups[ai] || groups[0];
+                  const gAvg = Math.round(g.items.reduce((n, r) => n + (r.percentage || 0), 0) / g.items.length);
+                  const passed = g.items.filter((r) => r.passed).length;
+                  return (
+                    <>
+                      {/* Course tabs */}
+                      {groups.length > 1 && (
+                        <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1 -mx-0.5 px-0.5" style={{ scrollbarWidth: "none" }}>
+                          {groups.map((grp, idx) => (
+                            <button key={grp.course} onClick={() => setScoreTab(idx)} title={grp.course}
+                              className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full transition truncate max-w-[150px] ${idx === ai ? "bg-[#db254f] text-white shadow-sm shadow-rose-500/30" : "pf-chip pf-hover"}`}>
+                              {grp.course}
+                            </button>
+                          ))}
                         </div>
+                      )}
+
+                      {/* Active course + avg */}
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <span className="text-xs font-bold truncate min-w-0 flex items-center gap-1.5"><BookOpen size={13} className="text-[#db254f] shrink-0" /> {g.course}</span>
+                        <span className="text-[11px] pf-faint shrink-0 whitespace-nowrap">avg <b style={{ color: "var(--fg)" }}>{gAvg}%</b></span>
                       </div>
-                    ))}
-                  </div>
-                ) : (
+
+                      {/* Pie chart — each item is a slice sized by its score; the
+                          legend lists the real % (green = pass, red = fail). */}
+                      {(() => {
+                        const PIE = ["#db254f", "#6366f1", "#0ea5e9", "#f59e0b", "#10b981", "#8b5cf6", "#ec4899", "#14b8a6"];
+                        const vals = g.items.map((r) => Math.max(0.001, r.percentage || 0));
+                        const totalV = vals.reduce((a, b) => a + b, 0) || 1;
+                        const R = 62, CX = 70, CY = 70;
+                        let acc = -Math.PI / 2;
+                        const single = g.items.length === 1;
+                        return (
+                          <div className="flex flex-col items-center">
+                            <svg width="150" height="150" viewBox="0 0 140 140" className="shrink-0">
+                              {single ? (
+                                <circle cx={CX} cy={CY} r={R} fill={PIE[0]} />
+                              ) : g.items.map((r, i) => {
+                                const a0 = acc, a1 = acc + (vals[i] / totalV) * 2 * Math.PI; acc = a1;
+                                const large = (a1 - a0) > Math.PI ? 1 : 0;
+                                const x0 = CX + R * Math.cos(a0), y0 = CY + R * Math.sin(a0);
+                                const x1 = CX + R * Math.cos(a1), y1 = CY + R * Math.sin(a1);
+                                const d = `M${CX},${CY} L${x0.toFixed(2)},${y0.toFixed(2)} A${R},${R} 0 ${large} 1 ${x1.toFixed(2)},${y1.toFixed(2)} Z`;
+                                return <path key={r.id} d={d} fill={PIE[i % PIE.length]} style={{ stroke: "var(--bg-elev, #141414)", strokeWidth: 2 }} />;
+                              })}
+                            </svg>
+                            {/* Legend */}
+                            <div className="w-full mt-3 space-y-1.5 max-h-[120px] overflow-y-auto pf-scroll pr-1 -mr-1">
+                              {g.items.map((r, i) => {
+                                const tm = typeMeta(r.type);
+                                return (
+                                  <div key={r.id} className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="flex items-center gap-1.5 min-w-0">
+                                      <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: PIE[i % PIE.length] }} />
+                                      <span className="text-[9px] font-bold uppercase tracking-wide px-1 py-0.5 rounded shrink-0" style={{ color: tm.c, background: tm.bg }}>{tm.label}</span>
+                                      <span className="truncate pf-muted">{r.assessmentTitle || tm.label}</span>
+                                    </span>
+                                    <span className="font-extrabold tabular-nums shrink-0" style={{ color: r.passed ? "#10b981" : "#f43f5e" }}>{r.percentage || 0}%</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      <div className="flex items-center justify-between mt-3 pt-2.5 border-t pf-border text-[11px] pf-faint">
+                        <span>{passed}/{g.items.length} passed</span>
+                        <span className="inline-flex items-center gap-3">
+                          <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: "#10b981" }} /> Pass</span>
+                          <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: "#f43f5e" }} /> Fail</span>
+                        </span>
+                      </div>
+                    </>
+                  );
+                })() : (
                   <div className="text-center py-5">
                     <div className="w-11 h-11 rounded-xl pf-chip flex items-center justify-center mx-auto mb-2.5"><Trophy size={20} /></div>
                     <p className="pf-muted text-sm">No quiz scores yet.</p>

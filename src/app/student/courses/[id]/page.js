@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   ArrowLeft, ArrowRight, BookOpen, PlayCircle, FileText, HelpCircle, ChevronDown, Clock,
   Users, Download, CheckCircle2, Video as VideoIcon, Lock, Check, Eye, X, Loader2,
-  Play, Pause, SkipForward, SkipBack, Zap, Box, ExternalLink,
+  Play, Pause, SkipForward, SkipBack, Zap, Box, ExternalLink, Mic, Send, Trash2, Radio, Volume2, Bot, PhoneOff,
 } from "lucide-react";
 import StudentShell from "@/components/portal/StudentShell";
 import { apiFetch } from "@/lib/api";
@@ -128,6 +128,7 @@ function QuizPlayer({ courseId, quiz }) {
   const [result, setResult] = useState(quiz.lastResult || null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const cam = useProctorCamera(); // camera-on proctoring while taking the quiz
 
   const total = quiz.questions.length;
   const answeredCount = Object.keys(answers).length;
@@ -143,7 +144,7 @@ function QuizPlayer({ courseId, quiz }) {
       });
       const d = await res.json();
       if (res.ok) setResult(d); else setError(d.error || "Failed to submit");
-    } finally { setSubmitting(false); }
+    } finally { setSubmitting(false); cam.stop(); }
   };
 
   /* ── Result screen (final — one attempt only) ── */
@@ -181,9 +182,12 @@ function QuizPlayer({ courseId, quiz }) {
           <span className="inline-flex items-center gap-2 text-sm font-semibold pf-card px-4 py-2 rounded-full"><HelpCircle size={15} className="text-[#db254f]" /> {total} Question{total !== 1 ? "s" : ""}</span>
           <span className="inline-flex items-center gap-2 text-sm font-semibold pf-card px-4 py-2 rounded-full"><CheckCircle2 size={15} className="text-[#db254f]" /> Pass 50%</span>
         </div>
-        <button onClick={() => setStarted(true)} style={{ marginTop: "1.75rem" }} className="btn-pill inline-flex items-center gap-2 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-6 py-3 shadow-md shadow-rose-500/30 transition">
-          Start Quiz <ArrowRight size={16} />
-        </button>
+        <p className="text-xs pf-faint mt-4 inline-flex items-center gap-1.5"><Radio size={12} className="text-[#db254f]" /> Your camera stays on during the quiz.</p>
+        <div>
+          <button onClick={async () => { try { await cam.start(false); } catch { /* best-effort proctoring */ } setStarted(true); }} style={{ marginTop: "1.25rem" }} className="btn-pill inline-flex items-center gap-2 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] text-white px-6 py-3 shadow-md shadow-rose-500/30 transition">
+            Start Quiz <ArrowRight size={16} />
+          </button>
+        </div>
       </div>
     );
   }
@@ -195,11 +199,17 @@ function QuizPlayer({ courseId, quiz }) {
 
   return (
     <div>
-      {/* Segmented progress */}
+      {/* Camera proctor + progress */}
       <div className="flex items-center justify-between mb-3">
-        <span className="inline-flex items-center gap-2">
-          <span className="text-2xl font-extrabold text-[#db254f] leading-none">{String(cur + 1).padStart(2, "0")}</span>
-          <span className="pf-faint text-sm font-medium">/ {String(total).padStart(2, "0")}</span>
+        <span className="inline-flex items-center gap-2.5">
+          <span className="relative w-12 h-9 rounded-md overflow-hidden bg-black shrink-0">
+            <video ref={cam.attach} className="w-full h-full object-cover" style={{ transform: "scaleX(-1)" }} playsInline autoPlay muted />
+            <span className="absolute top-0.5 left-0.5 inline-flex items-center gap-0.5 text-[7px] font-bold text-white px-1 rounded-full" style={{ background: "rgba(220,38,38,0.85)" }}><Radio size={6} /> REC</span>
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <span className="text-2xl font-extrabold text-[#db254f] leading-none">{String(cur + 1).padStart(2, "0")}</span>
+            <span className="pf-faint text-sm font-medium">/ {String(total).padStart(2, "0")}</span>
+          </span>
         </span>
         <span className="text-xs font-semibold pf-chip px-3 py-1.5 rounded-full">{answeredCount}/{total} answered</span>
       </div>
@@ -255,6 +265,280 @@ function QuizPlayer({ courseId, quiz }) {
             Next <ArrowRight size={14} />
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* Shared result view for course Written exam / AI Interview (AI-graded). */
+function ExamResult({ kind, result }) {
+  const pct = result.percentage ?? (result.total ? Math.round((result.score / result.total) * 100) : 0);
+  return (
+    <div>
+      <div className="text-center py-3">
+        <span className="w-14 h-14 rounded-full mx-auto flex items-center justify-center mb-3" style={{ background: result.passed ? "rgba(16,185,129,0.15)" : "rgba(219,37,79,0.12)", color: result.passed ? "#10b981" : "#db254f" }}><CheckCircle2 size={26} /></span>
+        <h3 className="text-xl font-extrabold">{kind} complete</h3>
+        <p className="pf-muted text-sm mt-1">Your responses were {result.graded === false ? "submitted" : "scored by AI"}.</p>
+        <div className="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-full" style={{ background: "rgba(219,37,79,0.08)", border: "1px solid rgba(219,37,79,0.18)" }}>
+          <Bot size={15} className="text-[#db254f]" /> <span className="font-bold">{result.score}/{result.total} · {pct}%</span>
+        </div>
+      </div>
+      {result.breakdown?.length > 0 && (
+        <div className="mt-4 space-y-2.5">
+          <div className="text-xs font-bold uppercase tracking-wide pf-faint">Breakdown</div>
+          {result.breakdown.map((b, i) => (
+            <div key={i} className="rounded-xl border pf-border p-3">
+              <div className="flex items-start justify-between gap-3"><span className="text-sm font-semibold">Q{i + 1}. {b.question}</span><span className="text-sm font-extrabold shrink-0 px-2 py-0.5 rounded-lg pf-chip">{b.marks}/{b.maxMarks}</span></div>
+              {b.feedback && <p className="text-xs pf-muted mt-1.5 flex gap-1.5"><Bot size={12} className="text-[#db254f] shrink-0 mt-0.5" /><span>{b.feedback}</span></p>}
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[11px] pf-faint mt-3 text-center">You have already completed this. Scores are final.</p>
+    </div>
+  );
+}
+
+/* Small reusable camera proctor preview. Starts the camera on mount of "live". */
+function useProctorCamera() {
+  const streamRef = useRef(null);
+  const stop = () => { try { streamRef.current?.getTracks().forEach((t) => t.stop()); } catch { /* noop */ } streamRef.current = null; };
+  useEffect(() => () => stop(), []);
+  const attach = (el) => { if (el && streamRef.current && el.srcObject !== streamRef.current) { el.srcObject = streamRef.current; el.muted = true; el.playsInline = true; el.play().catch(() => {}); } };
+  const start = async (withAudio) => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) throw new Error("no-camera");
+    streamRef.current = await navigator.mediaDevices.getUserMedia({ video: true, audio: !!withAudio });
+  };
+  return { streamRef, stop, attach, start };
+}
+
+/* Written exam inside the course — camera on (proctoring), typed answers,
+   AI-graded on submit. One attempt. */
+function WrittenPlayer({ courseId, item }) {
+  const [phase, setPhase] = useState(item.lastResult ? "done" : "ready"); // ready|live|submitting|done
+  const [answers, setAnswers] = useState(() => (item.questions || []).map(() => ""));
+  const [result, setResult] = useState(item.lastResult || null);
+  const [err, setErr] = useState("");
+  const cam = useProctorCamera();
+
+  const start = async () => {
+    setErr("");
+    try { await cam.start(false); setPhase("live"); }
+    catch (e) { setErr(e?.name === "NotAllowedError" ? "Camera permission was blocked. Allow it in the address bar and try again." : "Could not access the camera. Use Google Chrome on https or localhost."); }
+  };
+
+  const submit = async () => {
+    setPhase("submitting");
+    try {
+      const res = await apiFetch(`/api/student/courses/${courseId}/exam`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemIndex: item.index, answers }),
+      });
+      const d = await res.json();
+      if (res.ok) setResult(d);
+    } finally { cam.stop(); setPhase("done"); }
+  };
+
+  if (phase === "done" && result) return <ExamResult kind="Written exam" result={result} />;
+
+  if (phase === "ready") {
+    return (
+      <div className="text-center py-4">
+        <span className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center mb-3 text-white shadow-lg shadow-amber-500/30" style={{ background: "linear-gradient(135deg,#f59e0b,#fbbf24)" }}><FileText size={26} /></span>
+        <h3 className="text-xl font-extrabold">{item.name}</h3>
+        <p className="pf-muted text-sm mt-1.5 max-w-md mx-auto">{item.questionCount} question{item.questionCount !== 1 ? "s" : ""} · {item.totalMarks} marks · AI-graded. Your <b style={{ color: "var(--fg)" }}>camera stays on</b> during the exam.</p>
+        {err && <p className="text-sm text-rose-500 mt-3">{err}</p>}
+        <button onClick={start} className="btn-pill mt-4 inline-flex items-center gap-2 text-sm font-semibold text-white px-6 py-3 transition shadow-md shadow-amber-500/30" style={{ background: "linear-gradient(135deg,#f59e0b,#f97316)" }}><Play size={16} fill="currentColor" /> Start Written Exam</button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4 rounded-xl border pf-border p-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="relative w-20 h-14 rounded-lg overflow-hidden bg-black shrink-0">
+            <video ref={cam.attach} className="w-full h-full object-cover" style={{ transform: "scaleX(-1)" }} playsInline autoPlay muted />
+            <span className="absolute top-1 left-1 inline-flex items-center gap-1 text-[9px] font-bold text-white px-1.5 rounded-full" style={{ background: "rgba(220,38,38,0.85)" }}><Radio size={8} /> REC</span>
+          </div>
+          <div className="text-xs min-w-0"><div className="font-semibold">Proctoring on</div><div className="pf-faint truncate">Camera is on during your exam.</div></div>
+        </div>
+        <span className="text-xs font-semibold pf-faint shrink-0">{item.totalMarks} marks</span>
+      </div>
+
+      <div className="space-y-4">
+        {(item.questions || []).map((q, i) => (
+          <div key={i} className="rounded-xl border pf-border p-3.5">
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <p className="text-sm font-semibold"><span className="text-amber-500">Q{i + 1}.</span> {q.question}</p>
+              <span className="text-[11px] pf-faint shrink-0">{q.maxMarks} marks</span>
+            </div>
+            <textarea rows={4} value={answers[i]} onChange={(e) => setAnswers((a) => a.map((x, j) => (j === i ? e.target.value : x)))}
+              placeholder="Write your answer…" className="w-full rounded-xl border pf-border bg-transparent px-3 py-2.5 text-sm outline-none focus:border-[#db254f] resize-y" />
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-end mt-4">
+        <button onClick={submit} disabled={phase === "submitting"} className="btn-pill inline-flex items-center gap-2 text-sm font-semibold bg-[#db254f] hover:bg-[#b91d40] disabled:opacity-60 text-white px-6 py-3 transition">
+          <Send size={15} /> {phase === "submitting" ? "Submitting…" : "Submit Exam"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const CI_SILENCE_MS = 3500, CI_INITIAL_MS = 18000, CI_PREP = 5;
+const CI_REPEAT_RE = /\b(repeat (the |this |that )?question|repeat (that|it|this)|please repeat|can you (please )?repeat|say (that|it) again|come again|once more)\b/i;
+
+/* AI Interview inside the course — camera + voice, AI asks each question aloud,
+   AI-graded on finish. Camera-only proctoring (no recording for now). */
+function InterviewPlayer({ courseId, item }) {
+  const [phase, setPhase] = useState(item.lastResult ? "done" : "ready"); // ready|live|processing|done
+  const [step, setStep] = useState(0);
+  const [status, setStatus] = useState("speaking"); // speaking|prep|listening
+  const [count, setCount] = useState(0);
+  const [countLabel, setCountLabel] = useState("");
+  const [result, setResult] = useState(item.lastResult || null);
+  const [err, setErr] = useState("");
+
+  const cam = useProctorCamera();
+  const recognitionRef = useRef(null);
+  const finalRef = useRef("");
+  const liveActiveRef = useRef(false);
+  const silenceRef = useRef(null);
+  const advancingRef = useRef(false);
+  const countdownRef = useRef(null);
+  const repeatingRef = useRef(false);
+  const stepRef = useRef(0);
+  const answersRef = useRef([]);
+  const questionsRef = useRef((item.questions || []).map((q) => ({ question: q.question, maxMarks: q.maxMarks })));
+
+  const speak = (text) => new Promise((resolve) => {
+    let done = false; const finish = () => { if (!done) { done = true; resolve(); } };
+    try {
+      const synth = window.speechSynthesis;
+      if (!synth || typeof SpeechSynthesisUtterance === "undefined") { finish(); return; }
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(text); u.rate = 1;
+      const voices = synth.getVoices(); const en = voices.find((v) => /en[-_]/i.test(v.lang)) || voices.find((v) => /^en/i.test(v.lang)); if (en) u.voice = en;
+      u.onend = finish; u.onerror = finish; synth.speak(u);
+      setTimeout(finish, Math.min(22000, 1800 + text.length * 75));
+    } catch { finish(); }
+  });
+  const clearSilence = () => { if (silenceRef.current) { clearTimeout(silenceRef.current); silenceRef.current = null; } };
+  const armSilence = (ms) => { clearSilence(); silenceRef.current = setTimeout(() => advance(), ms); };
+  const clearCountdown = () => { if (countdownRef.current) { clearTimeout(countdownRef.current); countdownRef.current = null; } };
+  const runCountdown = (label, n = CI_PREP) => new Promise((resolve) => {
+    clearCountdown(); setStatus("prep"); setCountLabel(label); let c = n; setCount(c);
+    const tick = () => { c -= 1; if (c < 1 || advancingRef.current) { setCount(0); countdownRef.current = null; resolve(); return; } setCount(c); countdownRef.current = setTimeout(tick, 1000); };
+    countdownRef.current = setTimeout(tick, 1000);
+  });
+  const startSTT = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { armSilence(CI_INITIAL_MS); return; }
+    const rec = new SR(); rec.lang = "en-IN"; rec.continuous = true; rec.interimResults = true;
+    rec.onresult = (e) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) { const t = e.results[i][0].transcript; if (e.results[i].isFinal) finalRef.current += t + " "; else interim += t; }
+      const full = (finalRef.current + interim).trim();
+      if (!repeatingRef.current && full.length < 60 && CI_REPEAT_RE.test(full)) { repeatQuestion(); return; }
+      if (full) armSilence(CI_SILENCE_MS);
+    };
+    rec.onend = () => { if (liveActiveRef.current) { try { rec.start(); } catch { /* noop */ } } };
+    recognitionRef.current = rec; try { rec.start(); } catch { /* noop */ }
+  };
+  const stopSTT = () => { liveActiveRef.current = false; try { recognitionRef.current?.stop(); } catch { /* noop */ } };
+  const beginListening = () => { finalRef.current = ""; setStatus("listening"); liveActiveRef.current = true; startSTT(); armSilence(CI_INITIAL_MS); };
+  const askQuestion = async (i) => {
+    repeatingRef.current = false; finalRef.current = ""; setStatus("speaking");
+    await speak(`Question ${i + 1}. ${questionsRef.current[i].question}`);
+    if (advancingRef.current) return; await runCountdown("Get ready to answer"); if (advancingRef.current) return; beginListening();
+  };
+  const repeatQuestion = async () => {
+    if (repeatingRef.current || advancingRef.current) return; repeatingRef.current = true; clearSilence(); stopSTT();
+    try { window.speechSynthesis.cancel(); } catch { /* noop */ } finalRef.current = "";
+    const i = stepRef.current; setStatus("speaking"); await speak(questionsRef.current[i].question);
+    if (advancingRef.current) { repeatingRef.current = false; return; } await runCountdown("Get ready to answer");
+    if (advancingRef.current) { repeatingRef.current = false; return; } repeatingRef.current = false; beginListening();
+  };
+  const advance = async () => {
+    if (advancingRef.current) return; advancingRef.current = true; clearSilence(); clearCountdown(); stopSTT();
+    try { window.speechSynthesis.cancel(); } catch { /* noop */ }
+    const i = stepRef.current; answersRef.current[i] = (finalRef.current || "").trim();
+    if (i < questionsRef.current.length - 1) { const ni = i + 1; stepRef.current = ni; setStep(ni); advancingRef.current = false; await askQuestion(ni); }
+    else await finish();
+  };
+  const begin = async () => {
+    setErr("");
+    try { await cam.start(true); }
+    catch (e) { setErr(e?.name === "NotAllowedError" ? "Camera & mic permission was blocked. Allow it and try again." : "Could not access camera/microphone. Use Google Chrome on https or localhost."); return; }
+    advancingRef.current = false; repeatingRef.current = false; stepRef.current = 0; setStep(0);
+    answersRef.current = new Array(questionsRef.current.length).fill("");
+    setPhase("live");
+    (async () => { await runCountdown("Interview starts in"); if (advancingRef.current) return; askQuestion(0); })();
+  };
+  const finish = async () => {
+    clearSilence(); clearCountdown(); stopSTT(); try { window.speechSynthesis.cancel(); } catch { /* noop */ }
+    cam.stop(); setPhase("processing");
+    try {
+      const res = await apiFetch(`/api/student/courses/${courseId}/exam`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemIndex: item.index, answers: answersRef.current }),
+      });
+      const d = await res.json(); if (res.ok) setResult(d);
+    } catch { /* noop */ }
+    setPhase("done");
+  };
+  const endNow = () => { advancingRef.current = true; finish(); };
+  useEffect(() => () => { try { window.speechSynthesis?.cancel(); } catch { /* noop */ } try { recognitionRef.current?.stop(); } catch { /* noop */ } clearSilence(); clearCountdown(); }, []);
+
+  if (phase === "done" && result) return <ExamResult kind="AI Interview" result={result} />;
+  if (phase === "processing") return <div className="flex flex-col items-center gap-3 py-8"><Loader2 className="animate-spin text-[#db254f]" size={28} /><p className="pf-muted text-sm">Scoring your interview…</p></div>;
+
+  if (phase === "ready") {
+    return (
+      <div className="text-center py-4">
+        <span className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center mb-3 text-white shadow-lg shadow-teal-500/30" style={{ background: "linear-gradient(135deg,#0d9488,#2dd4bf)" }}><Bot size={26} /></span>
+        <h3 className="text-xl font-extrabold">{item.name}</h3>
+        <p className="pf-muted text-sm mt-1.5 max-w-md mx-auto">{item.questionCount} question{item.questionCount !== 1 ? "s" : ""} · {item.totalMarks} marks · AI-graded. The AI asks each aloud — <b style={{ color: "var(--fg)" }}>speak your answer</b>, camera & mic stay on.</p>
+        {err && <p className="text-sm text-rose-500 mt-3">{err}</p>}
+        <button onClick={begin} className="btn-pill mt-4 inline-flex items-center gap-2 text-sm font-semibold text-white px-6 py-3 transition shadow-md shadow-teal-500/30" style={{ background: "linear-gradient(135deg,#0d9488,#14b8a6)" }}><Play size={16} fill="currentColor" /> Start AI Interview</button>
+      </div>
+    );
+  }
+
+  const listening = status === "listening";
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <span className="font-bold flex items-center gap-2 text-sm"><Bot size={16} className="text-[#0d9488]" /> AI Interview</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs pf-faint">Question {step + 1} of {questionsRef.current.length}</span>
+          <button onClick={endNow} className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-rose-500 hover:bg-rose-600 rounded-full px-3 py-1.5 transition"><PhoneOff size={13} /> End</button>
+        </div>
+      </div>
+      <div className="flex gap-1 mb-3">
+        {questionsRef.current.map((_, i) => <div key={i} className="flex-1 h-1 rounded-full" style={{ background: i < step ? "#10b981" : i === step ? "#0d9488" : "rgba(var(--fg-rgb),0.12)" }} />)}
+      </div>
+      <div className="relative w-full aspect-video rounded-2xl overflow-hidden border pf-border bg-black">
+        <video ref={cam.attach} className="w-full h-full object-cover" style={{ transform: "scaleX(-1)" }} playsInline autoPlay muted />
+        <div className="absolute top-3 left-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white px-2.5 py-1 rounded-full" style={{ background: "rgba(220,38,38,0.85)" }}><Radio size={12} /> REC</div>
+        <div className="absolute top-3 right-3 flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: "rgba(0,0,0,0.5)" }}>
+          <span className={`w-7 h-7 rounded-full flex items-center justify-center text-white ${!listening ? "animate-pulse" : ""}`} style={{ background: "linear-gradient(135deg,#0d9488,#2dd4bf)" }}><Bot size={15} /></span>
+          <span className="text-xs font-semibold text-white">AI Interviewer</span>
+        </div>
+        {count > 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center z-10" style={{ background: "rgba(0,0,0,0.5)" }}>
+            <p className="text-white/85 text-sm font-semibold mb-3">{countLabel}</p>
+            <div key={count} className="w-24 h-24 rounded-full flex items-center justify-center text-5xl font-extrabold text-white" style={{ background: "linear-gradient(135deg,#0d9488,#2dd4bf)", boxShadow: "0 12px 50px rgba(13,148,136,0.5)" }}>{count}</div>
+          </div>
+        )}
+        <div className="absolute inset-x-0 bottom-0 p-4 flex flex-col items-center gap-2" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent)" }}>
+          <div className={`inline-flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-full ${listening ? "bg-emerald-600/90" : status === "prep" ? "bg-amber-500/90" : "bg-[#0d9488]/90"}`}>
+            {listening ? <><Mic size={15} /> Your turn — speak your answer</> : status === "prep" ? <><Loader2 size={15} className="animate-spin" /> Get ready…</> : <><Volume2 size={15} /> AI is asking the question…</>}
+          </div>
+          <p className="text-[11px] text-white/70 text-center">{listening ? "Pause when done — next question is automatic. Say “please repeat the question” to hear it again." : "Listen, then answer aloud."}</p>
+        </div>
       </div>
     </div>
   );
@@ -357,13 +641,19 @@ export default function CourseLearningPage() {
   );
 
   const { course, curriculum } = data;
-  const classCount = curriculum.filter((c) => c.type === "class").length;
+  // Curriculum item categories: a "class" (videos) vs an exam item (quiz /
+  // written / interview). Legacy items with no `type` are classes.
+  const isClass = (c) => c.type === "class" || !c.type;
+  const isExamItem = (c) => c.type === "quiz" || c.type === "written" || c.type === "interview";
+  const classCount = curriculum.filter(isClass).length;
   const quizCount = curriculum.filter((c) => c.type === "quiz").length;
+  const writtenCount = curriculum.filter((c) => c.type === "written").length;
+  const interviewCount = curriculum.filter((c) => c.type === "interview").length;
   const videoCount = curriculum.reduce((n, c) => n + (c.videos?.length || 0), 0);
 
   /* ── Progressive (drip) unlock logic ── */
   const classComplete = (cls) => (cls.videos || []).every((_, vi) => completed.has(`${cls.index}:${vi}`));
-  const prevClassOf = (i) => { for (let k = i - 1; k >= 0; k--) { if (curriculum[k].type !== "quiz") return curriculum[k]; } return null; };
+  const prevClassOf = (i) => { for (let k = i - 1; k >= 0; k--) { if (isClass(curriculum[k])) return curriculum[k]; } return null; };
   // A class/quiz item unlocks once the nearest preceding class is fully watched.
   const itemUnlocked = (i) => { const pc = prevClassOf(i); return !pc || classComplete(pc); };
   // Within an unlocked class, a lecture unlocks once the previous one is done.
@@ -372,7 +662,7 @@ export default function CourseLearningPage() {
 
   /* ── Quick-action: flat video order (prev/next) + overall progress ── */
   const flatVideos = [];
-  curriculum.forEach((item) => { if (item.type !== "quiz") (item.videos || []).forEach((v, vi) => flatVideos.push({ ci: item.index, vi, item, v })); });
+  curriculum.forEach((item) => { if (isClass(item)) (item.videos || []).forEach((v, vi) => flatVideos.push({ ci: item.index, vi, item, v })); });
   const curFlat = flatVideos.findIndex((f) => currentVideo && f.ci === currentVideo.ci && f.vi === currentVideo.vi);
   const prevV = curFlat > 0 ? flatVideos[curFlat - 1] : null;
   const nextV = curFlat >= 0 && curFlat < flatVideos.length - 1 ? flatVideos[curFlat + 1] : null;
@@ -381,7 +671,7 @@ export default function CourseLearningPage() {
   const doneVideos = flatVideos.filter((f) => completed.has(`${f.ci}:${f.vi}`)).length;
   const progressPct = totalVideos ? Math.round((doneVideos / totalVideos) * 100) : 0;
   // Study materials of the class the current video belongs to.
-  const curClass = currentVideo ? curriculum.find((c) => c.type !== "quiz" && c.index === currentVideo.ci) : null;
+  const curClass = currentVideo ? curriculum.find((c) => isClass(c) && c.index === currentVideo.ci) : null;
   const curMaterials = curClass?.materials || [];
 
   return (
@@ -397,6 +687,8 @@ export default function CourseLearningPage() {
           <span className="inline-flex items-center gap-1.5 pf-muted"><BookOpen size={15} className="text-[#db254f]" /> {classCount} class{classCount !== 1 ? "es" : ""}</span>
           <span className="inline-flex items-center gap-1.5 pf-muted"><VideoIcon size={15} className="text-[#db254f]" /> {videoCount} video{videoCount !== 1 ? "s" : ""}</span>
           {quizCount > 0 && <span className="inline-flex items-center gap-1.5 pf-muted"><HelpCircle size={15} className="text-[#db254f]" /> {quizCount} quiz{quizCount !== 1 ? "zes" : ""}</span>}
+          {writtenCount > 0 && <span className="inline-flex items-center gap-1.5 pf-muted"><FileText size={15} className="text-[#db254f]" /> {writtenCount} written</span>}
+          {interviewCount > 0 && <span className="inline-flex items-center gap-1.5 pf-muted"><Mic size={15} className="text-[#db254f]" /> {interviewCount} interview{interviewCount !== 1 ? "s" : ""}</span>}
           {course.duration && <span className="inline-flex items-center gap-1.5 pf-muted"><Clock size={15} className="text-[#db254f]" /> {course.duration}</span>}
           {course.instructors?.length > 0 && <span className="inline-flex items-center gap-1.5 pf-muted"><Users size={15} className="text-[#db254f]" /> {course.instructors.join(", ")}</span>}
         </div>
@@ -520,28 +812,38 @@ export default function CourseLearningPage() {
           {curriculum.map((item, i) => {
             const isOpen = openIdx === i;
             const isQuiz = item.type === "quiz";
-            const classNo = curriculum.slice(0, i + 1).filter((c) => c.type !== "quiz").length;
+            const isWritten = item.type === "written";
+            const isInterview = item.type === "interview";
+            const isExam = isQuiz || isWritten || isInterview;
+            const classNo = curriculum.slice(0, i + 1).filter(isClass).length;
             const locked = !itemUnlocked(i);
-            const done = isQuiz ? !!item.lastResult : ((item.videos || []).length > 0 && classComplete(item));
-            const vidTotal = isQuiz ? 0 : (item.videos || []).length;
-            const vidDone = isQuiz ? 0 : (item.videos || []).filter((_, vi) => completed.has(`${item.index}:${vi}`)).length;
+            const done = isExam ? !!item.lastResult : ((item.videos || []).length > 0 && classComplete(item));
+            const vidTotal = isExam ? 0 : (item.videos || []).length;
+            const vidDone = isExam ? 0 : (item.videos || []).filter((_, vi) => completed.has(`${item.index}:${vi}`)).length;
             const pct = vidTotal ? Math.round((vidDone / vidTotal) * 100) : 0;
-            const badgeCls = isQuiz && !locked && !done ? "text-white" : (!done && !locked ? "pf-chip" : "");
+            // Accent colour per exam type (quiz=rose, written=amber, interview=teal).
+            const examGrad = isWritten ? "linear-gradient(135deg,#f59e0b,#fbbf24)" : isInterview ? "linear-gradient(135deg,#0d9488,#2dd4bf)" : "linear-gradient(135deg,#db254f,#e56b85)";
+            const badgeCls = isExam && !locked && !done ? "text-white" : (!done && !locked ? "pf-chip" : "");
             const badgeStyle = done ? { background: "rgba(16,185,129,0.15)", color: "#10b981" }
               : locked ? { background: "rgba(var(--fg-rgb),0.06)", color: "rgba(var(--fg-rgb),0.5)" }
-              : isQuiz ? { background: "linear-gradient(135deg, #db254f, #e56b85)" } : undefined;
+              : isExam ? { background: examGrad } : undefined;
+            const ExamIcon = isWritten ? FileText : isInterview ? Mic : HelpCircle;
             return (
               <div key={i} className={`pf-card overflow-hidden ${locked ? "opacity-75" : ""}`}>
                 <button onClick={() => { if (!locked) setOpenIdx(isOpen ? -1 : i); }}
                   className={`w-full flex items-center gap-3.5 p-4 text-left transition ${locked ? "cursor-not-allowed" : "pf-hover"}`}>
                   <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm ${badgeCls}`} style={badgeStyle}>
-                    {locked ? <Lock size={16} /> : done ? <CheckCircle2 size={18} /> : isQuiz ? <HelpCircle size={18} /> : String(classNo).padStart(2, "0")}
+                    {locked ? <Lock size={16} /> : done ? <CheckCircle2 size={18} /> : isExam ? <ExamIcon size={18} /> : String(classNo).padStart(2, "0")}
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="font-bold truncate">{item.name}</div>
                     <div className="text-xs pf-faint mt-0.5 flex items-center gap-2">
-                      {isQuiz ? (
-                        <span className="inline-flex items-center gap-1"><HelpCircle size={12} /> {item.questionCount} question{item.questionCount !== 1 ? "s" : ""}</span>
+                      {isExam ? (
+                        <>
+                          <span className="inline-flex items-center gap-1"><ExamIcon size={12} /> {item.questionCount} question{item.questionCount !== 1 ? "s" : ""}</span>
+                          {!isQuiz && item.totalMarks > 0 && <span className="inline-flex items-center gap-1">· {item.totalMarks} marks</span>}
+                          {done && item.lastResult && <span className="inline-flex items-center gap-1 font-semibold" style={{ color: "#10b981" }}>· {isQuiz ? `${item.lastResult.percentage}%` : `${item.lastResult.score}/${item.lastResult.total}`}</span>}
+                        </>
                       ) : (
                         <>
                           <span className="inline-flex items-center gap-1"><VideoIcon size={12} /> {item.videos?.length || 0}</span>
@@ -549,7 +851,7 @@ export default function CourseLearningPage() {
                         </>
                       )}
                     </div>
-                    {!isQuiz && !locked && vidTotal > 0 && (
+                    {!isExam && !locked && vidTotal > 0 && (
                       <div className="mt-2 flex items-center gap-2 max-w-md">
                         <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(var(--fg-rgb),0.1)" }}>
                           <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: done ? "#10b981" : "#db254f" }} />
@@ -565,7 +867,12 @@ export default function CourseLearningPage() {
                   ) : (
                     <>
                       {done && <span className="text-[11px] font-bold text-emerald-500 hidden sm:block">Completed</span>}
-                      {isQuiz && !done && <span className="text-[11px] font-bold uppercase tracking-wide text-[#db254f] bg-rose-500/10 px-2.5 py-1 rounded-full hidden sm:block">Quiz</span>}
+                      {isExam && !done && (
+                        <span className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full hidden sm:block"
+                          style={{ color: isWritten ? "#d97706" : isInterview ? "#0d9488" : "#db254f", background: isWritten ? "rgba(245,158,11,0.12)" : isInterview ? "rgba(13,148,136,0.12)" : "rgba(219,37,79,0.10)" }}>
+                          {isWritten ? "Written" : isInterview ? "AI Interview" : "Quiz"}
+                        </span>
+                      )}
                       <ChevronDown size={18} className={`pf-faint transition-transform shrink-0 ${isOpen ? "rotate-180" : ""}`} />
                     </>
                   )}
@@ -578,6 +885,18 @@ export default function CourseLearningPage() {
                         {item.questionCount > 0
                           ? <QuizPlayer courseId={course.id} quiz={item} />
                           : <p className="pf-muted text-sm">This quiz has no questions yet.</p>}
+                      </div>
+                    ) : isWritten ? (
+                      <div className="p-4 sm:p-5">
+                        {item.questionCount > 0
+                          ? <WrittenPlayer courseId={course.id} item={item} />
+                          : <p className="pf-muted text-sm">This written exam has no questions yet.</p>}
+                      </div>
+                    ) : isInterview ? (
+                      <div className="p-4 sm:p-5">
+                        {item.questionCount > 0
+                          ? <InterviewPlayer courseId={course.id} item={item} />
+                          : <p className="pf-muted text-sm">This interview has no questions yet.</p>}
                       </div>
                     ) : (item.videos || []).length === 0 && (item.materials || []).length === 0 ? (
                       <p className="pf-muted text-sm p-5">No content in this class yet.</p>

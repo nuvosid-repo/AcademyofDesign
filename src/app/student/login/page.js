@@ -6,7 +6,6 @@ export default function StudentLoginPage() {
       brand="Student Portal"
       requiredRole="student"
       redirectTo="/student/dashboard"
-      hint="Demo: demo@nuvosid.design / password123"
     />
   );
 }

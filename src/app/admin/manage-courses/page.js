@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, Fragment } from "react";
-import { Pencil, Trash2, Plus, X, BookOpen, Video as VideoIcon, FileText, Upload, ChevronDown, HelpCircle, Check, Box } from "lucide-react";
+import { Pencil, Trash2, Plus, X, BookOpen, Video as VideoIcon, FileText, Upload, ChevronDown, HelpCircle, Check, Box, Mic } from "lucide-react";
 import AdminShell from "@/components/portal/AdminShell";
 import SearchSelect from "@/components/portal/SearchSelect";
 import MultiSelect from "@/components/portal/MultiSelect";
@@ -43,6 +43,10 @@ export default function ManageCoursesPage() {
   const [search, setSearch] = useState("");
   const [pageSize, setPageSize] = useState(50);
   const [openVideos, setOpenVideos] = useState(null);
+  // Which curriculum items (classes/quizzes) are expanded in the editor. Default
+  // collapsed so a long curriculum doesn't force endless scrolling.
+  const [openCur, setOpenCur] = useState({});
+  const toggleCur = (ci) => setOpenCur((o) => ({ ...o, [ci]: !o[ci] }));
 
   const load = () =>
     apiFetch("/api/courses", { cache: "no-store" })
@@ -70,24 +74,48 @@ export default function ManageCoursesPage() {
   const setClasses = (updater) => setForm((f) => ({ ...f, classes: updater(f.classes) }));
   const mutClass = (ci, fn) => setClasses((cs) => cs.map((c, i) => (i === ci ? fn(c) : c)));
 
-  const addClass = () => setClasses((cs) => {
-    const n = cs.filter((c) => !c.type || c.type === "class").length + 1;
-    return [...cs, { type: "class", name: `Class ${n}`, videos: [], materials: [], model3dHtml: "" }];
-  });
+  const addClass = () => {
+    const newIdx = form.classes.length; // the appended item lands here
+    setClasses((cs) => {
+      const n = cs.filter((c) => !c.type || c.type === "class").length + 1;
+      return [...cs, { type: "class", name: `Class ${n}`, videos: [], materials: [], model3dHtml: "" }];
+    });
+    setOpenCur((o) => ({ ...o, [newIdx]: true })); // open the new class for editing
+  };
   const updateClassName = (ci, v) => mutClass(ci, (c) => ({ ...c, name: v }));
   const updateClassModel3d = (ci, v) => mutClass(ci, (c) => ({ ...c, model3dHtml: v }));
   const removeClass = (ci) => setClasses((cs) => cs.filter((_, i) => i !== ci));
 
   // ── Quizzes: a curriculum item (type "quiz") holding questions ──
-  const addQuiz = () => setClasses((cs) => {
-    const n = cs.filter((c) => c.type === "quiz").length + 1;
-    return [...cs, { type: "quiz", name: `Quiz ${n}`, videos: [], materials: [], questions: [{ question: "", options: ["", "", "", ""], correctIndex: 0 }] }];
-  });
+  const addQuiz = () => {
+    const newIdx = form.classes.length;
+    setClasses((cs) => {
+      const n = cs.filter((c) => c.type === "quiz").length + 1;
+      return [...cs, { type: "quiz", name: `Quiz ${n}`, videos: [], materials: [], questions: [{ question: "", options: ["", "", "", ""], correctIndex: 0 }] }];
+    });
+    setOpenCur((o) => ({ ...o, [newIdx]: true })); // open the new quiz for editing
+  };
   const addQuestion = (ci) => mutClass(ci, (c) => ({ ...c, questions: [...(c.questions || []), { question: "", options: ["", "", "", ""], correctIndex: 0 }] }));
   const removeQuestion = (ci, qi) => mutClass(ci, (c) => ({ ...c, questions: (c.questions || []).filter((_, j) => j !== qi) }));
   const updateQuestion = (ci, qi, v) => mutClass(ci, (c) => ({ ...c, questions: c.questions.map((q, j) => (j === qi ? { ...q, question: v } : q)) }));
   const updateOption = (ci, qi, oi, v) => mutClass(ci, (c) => ({ ...c, questions: c.questions.map((q, j) => (j === qi ? { ...q, options: q.options.map((o, k) => (k === oi ? v : o)) } : q)) }));
   const setCorrect = (ci, qi, oi) => mutClass(ci, (c) => ({ ...c, questions: c.questions.map((q, j) => (j === qi ? { ...q, correctIndex: oi } : q)) }));
+
+  // ── Written exam / AI interview: curriculum items holding marked questions ──
+  const addMarkedItem = (type) => {
+    const newIdx = form.classes.length;
+    const label = type === "interview" ? "AI Interview" : "Written Exam";
+    setClasses((cs) => {
+      const n = cs.filter((c) => c.type === type).length + 1;
+      return [...cs, { type, name: `${label} ${n}`, videos: [], materials: [], markedQuestions: [{ question: "", maxMarks: 10, modelAnswer: "" }] }];
+    });
+    setOpenCur((o) => ({ ...o, [newIdx]: true }));
+  };
+  const addWritten = () => addMarkedItem("written");
+  const addInterview = () => addMarkedItem("interview");
+  const addMarkedQ = (ci) => mutClass(ci, (c) => ({ ...c, markedQuestions: [...(c.markedQuestions || []), { question: "", maxMarks: 10, modelAnswer: "" }] }));
+  const removeMarkedQ = (ci, qi) => mutClass(ci, (c) => ({ ...c, markedQuestions: (c.markedQuestions || []).filter((_, j) => j !== qi) }));
+  const updateMarkedQ = (ci, qi, field, v) => mutClass(ci, (c) => ({ ...c, markedQuestions: (c.markedQuestions || []).map((q, j) => (j === qi ? { ...q, [field]: v } : q)) }));
 
   // videos within a class
   const addVideo = (ci) => mutClass(ci, (c) => ({ ...c, videos: [...c.videos, { title: "", url: "", description: "" }] }));
@@ -119,7 +147,7 @@ export default function ManageCoursesPage() {
   };
 
   const resetForm = () => {
-    setForm(EMPTY); setThumbName(""); setBannerName(""); setEditingId(null); setError("");
+    setForm(EMPTY); setThumbName(""); setBannerName(""); setEditingId(null); setError(""); setOpenCur({});
   };
 
   const openAdd = () => { resetForm(); setShowForm(true); if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" }); };
@@ -140,6 +168,12 @@ export default function ManageCoursesPage() {
               .map((q) => ({ question: q.question, options: q.options || [], correctIndex: q.correctIndex || 0 }));
             return { type: "quiz", name: c.name, videos: [], materials: [], questions };
           }
+          if (c.type === "written" || c.type === "interview") {
+            const markedQuestions = (c.markedQuestions || [])
+              .filter((q) => (q.question || "").trim())
+              .map((q) => ({ question: q.question.trim(), maxMarks: Number(q.maxMarks) || 0, modelAnswer: (q.modelAnswer || "").trim() }));
+            return { type: c.type, name: c.name, videos: [], materials: [], markedQuestions };
+          }
           return {
             type: "class",
             name: c.name,
@@ -149,7 +183,11 @@ export default function ManageCoursesPage() {
             model3dHtml: (c.model3dHtml || "").trim(),
           };
         })
-        .filter((c) => (c.type === "quiz" ? c.questions.length : (c.name.trim() || c.videos.length || c.materials.length || (c.model3dHtml || "").trim())));
+        .filter((c) => {
+          if (c.type === "quiz") return c.questions.length;
+          if (c.type === "written" || c.type === "interview") return c.markedQuestions.length;
+          return c.name.trim() || c.videos.length || c.materials.length || (c.model3dHtml || "").trim();
+        });
       const payload = { ...form, instructor: form.instructors[0] || "", classes: cleanClasses, videos: [], materials: [] };
       const res = editingId
         ? await apiFetch(`/api/courses/${editingId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
@@ -185,6 +223,8 @@ export default function ManageCoursesPage() {
       classes: (full.classes && full.classes.length)
         ? full.classes.map((cl) => (cl.type === "quiz"
             ? { type: "quiz", name: cl.name || "", videos: [], materials: [], questions: (cl.questions || []).map((q) => ({ question: q.question || "", options: (q.options && q.options.length) ? q.options : ["", "", "", ""], correctIndex: q.correctIndex || 0 })) }
+            : (cl.type === "written" || cl.type === "interview")
+            ? { type: cl.type, name: cl.name || "", videos: [], materials: [], markedQuestions: (cl.markedQuestions || []).map((q) => ({ question: q.question || "", maxMarks: q.maxMarks ?? 10, modelAnswer: q.modelAnswer || "" })) }
             : { type: "class", name: cl.name || "", videos: cl.videos || [], materials: cl.materials || [], questions: [], model3dHtml: cl.model3dHtml || "" }))
         : ((full.videos?.length || full.materials?.length)
             ? [{ type: "class", name: "Class 1", videos: full.videos || [], materials: full.materials || [], questions: [] }]
@@ -342,6 +382,8 @@ export default function ManageCoursesPage() {
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={addClass} className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-full btn-pill bg-[#db254f] hover:bg-[#b91d40] text-white px-4 py-2 transition"><Plus size={15} /> Add Class</button>
                   <button type="button" onClick={addQuiz} className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-full btn-pill bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 transition"><HelpCircle size={15} /> Add Quiz</button>
+                  <button type="button" onClick={addWritten} className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-full btn-pill bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 transition"><FileText size={15} /> Add Written</button>
+                  <button type="button" onClick={addInterview} className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-full btn-pill bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 transition"><Mic size={15} /> Add AI Interview</button>
                 </div>
               </div>
               <p className="text-xs text-gray-400 mb-4">Add classes (videos + materials) and quizzes in order. Tip: add a <span className="text-indigo-600 font-medium">Quiz</span> after a few classes (e.g. after Class 5) to give students a quick test.</p>
@@ -353,17 +395,21 @@ export default function ManageCoursesPage() {
               ) : (
                 <div className="space-y-4">
                   {form.classes.map((cls, ci) => cls.type === "quiz" ? (
-                    <div key={ci} className="rounded-2xl border border-indigo-200 overflow-hidden">
+                    <div key={ci} className="rounded-2xl border border-gray-200 overflow-hidden">
                       {/* Quiz header */}
-                      <div className="flex items-center gap-3 bg-indigo-50 px-4 py-3 border-b border-indigo-100">
+                      <div className="flex items-center gap-3 bg-gray-50 px-4 py-3">
                         <span className="w-7 h-7 rounded-full btn-pill bg-indigo-600 text-white flex items-center justify-center shrink-0"><HelpCircle size={15} /></span>
-                        <input className="flex-1 rounded-xl border border-indigo-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-indigo-500" placeholder={`Quiz name`} value={cls.name} onChange={(e) => updateClassName(ci, e.target.value)} />
-                        <span className="shrink-0 text-[11px] font-bold tracking-wide text-indigo-600 bg-white border border-indigo-200 rounded-full px-2.5 py-1">QUIZ</span>
+                        <input className="flex-1 min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-[#db254f]" placeholder={`Quiz name`} value={cls.name} onChange={(e) => updateClassName(ci, e.target.value)} />
+                        {!openCur[ci] && <span className="shrink-0 text-xs text-indigo-500 hidden md:inline">{(cls.questions || []).length} question{(cls.questions || []).length !== 1 ? "s" : ""}</span>}
+                        <span className="shrink-0 text-[11px] font-bold tracking-wide text-indigo-500 bg-white border border-gray-200 rounded-full px-2.5 py-1">QUIZ</span>
+                        <button type="button" onClick={() => toggleCur(ci)} title={openCur[ci] ? "Collapse" : "Expand"}
+                          className="shrink-0 w-9 h-9 rounded-full btn-pill bg-white border border-gray-200 hover:bg-gray-100 text-indigo-500 flex items-center justify-center"><ChevronDown size={16} className={`transition-transform ${openCur[ci] ? "rotate-180" : ""}`} /></button>
                         <button type="button" onClick={() => removeClass(ci)} title="Remove quiz"
                           className="shrink-0 w-9 h-9 rounded-full btn-pill bg-white border border-gray-200 hover:bg-rose-50 text-gray-400 hover:text-rose-500 flex items-center justify-center"><Trash2 size={15} /></button>
                       </div>
 
-                      <div className="p-4 space-y-4">
+                      {openCur[ci] && (
+                      <div className="p-4 space-y-4 border-t border-gray-100">
                         <p className="text-xs text-gray-400">Add questions with options and pick the correct answer (green radio). Students take this test inside the course.</p>
                         {(cls.questions || []).length === 0 ? (
                           <p className="text-xs text-gray-400">No questions yet.</p>
@@ -395,18 +441,68 @@ export default function ManageCoursesPage() {
                         )}
                         <button type="button" onClick={() => addQuestion(ci)} className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:underline"><Plus size={14} /> Add Question</button>
                       </div>
+                      )}
                     </div>
-                  ) : (
+                  ) : (cls.type === "written" || cls.type === "interview") ? (() => {
+                    const isInt = cls.type === "interview";
+                    return (
+                    <div key={ci} className="rounded-2xl border border-gray-200 overflow-hidden">
+                      {/* Written / AI-interview header */}
+                      <div className="flex items-center gap-3 px-4 py-3 bg-gray-50">
+                        <span className={`w-7 h-7 rounded-full btn-pill text-white flex items-center justify-center shrink-0 ${isInt ? "bg-teal-600" : "bg-amber-500"}`}>{isInt ? <Mic size={14} /> : <FileText size={14} />}</span>
+                        <input className="flex-1 min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-[#db254f]" placeholder={isInt ? "AI Interview name" : "Written Exam name"} value={cls.name} onChange={(e) => updateClassName(ci, e.target.value)} />
+                        {!openCur[ci] && <span className="shrink-0 text-xs hidden md:inline" style={{ color: isInt ? "#0d9488" : "#d97706" }}>{(cls.markedQuestions || []).length} question{(cls.markedQuestions || []).length !== 1 ? "s" : ""}</span>}
+                        <span className={`shrink-0 text-[11px] font-bold tracking-wide rounded-full px-2.5 py-1 bg-white border border-gray-200 ${isInt ? "text-teal-600" : "text-amber-600"}`}>{isInt ? "AI INTERVIEW" : "WRITTEN"}</span>
+                        <button type="button" onClick={() => toggleCur(ci)} title={openCur[ci] ? "Collapse" : "Expand"} className={`shrink-0 w-9 h-9 rounded-full btn-pill bg-white border border-gray-200 hover:bg-gray-100 flex items-center justify-center ${isInt ? "text-teal-600" : "text-amber-600"}`}><ChevronDown size={16} className={`transition-transform ${openCur[ci] ? "rotate-180" : ""}`} /></button>
+                        <button type="button" onClick={() => removeClass(ci)} title="Remove"
+                          className="shrink-0 w-9 h-9 rounded-full btn-pill bg-white border border-gray-200 hover:bg-rose-50 text-gray-400 hover:text-rose-500 flex items-center justify-center"><Trash2 size={15} /></button>
+                      </div>
+
+                      {openCur[ci] && (
+                      <div className="p-4 space-y-4 border-t border-gray-100">
+                        <p className="text-xs text-gray-400">{isInt
+                          ? "The AI reads each question aloud; the student answers by voice (camera stays on for proctoring). Each answer is AI-scored out of its marks."
+                          : "The student types answers (camera stays on for proctoring). Each answer is AI-scored out of its marks."}</p>
+                        {(cls.markedQuestions || []).length === 0 ? (
+                          <p className="text-xs text-gray-400">No questions yet.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {cls.markedQuestions.map((q, qi) => (
+                              <div key={qi} className="rounded-xl border border-gray-200 p-3">
+                                <div className="flex items-start gap-2">
+                                  <span className="w-6 h-6 rounded-full bg-gray-100 text-gray-600 text-xs font-bold flex items-center justify-center shrink-0 mt-2.5">{qi + 1}</span>
+                                  <textarea rows={2} className={`${field} resize-y`} placeholder="Question" value={q.question} onChange={(e) => updateMarkedQ(ci, qi, "question", e.target.value)} />
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <label className="text-xs text-gray-500">Max</label>
+                                    <input type="number" min={0} className="w-20 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-2.5 text-sm outline-none" value={q.maxMarks} onChange={(e) => updateMarkedQ(ci, qi, "maxMarks", e.target.value)} />
+                                    <button type="button" onClick={() => removeMarkedQ(ci, qi)} title="Remove question" className="w-9 h-9 rounded-full btn-pill bg-gray-100 hover:bg-rose-50 text-gray-400 hover:text-rose-500 flex items-center justify-center"><Trash2 size={15} /></button>
+                                  </div>
+                                </div>
+                                <textarea rows={2} className={`${field} resize-y mt-2`} placeholder="Model answer (optional — helps the AI grade accurately)" value={q.modelAnswer || ""} onChange={(e) => updateMarkedQ(ci, qi, "modelAnswer", e.target.value)} />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <button type="button" onClick={() => addMarkedQ(ci)} className={`inline-flex items-center gap-1.5 text-sm font-medium hover:underline ${isInt ? "text-teal-600" : "text-amber-600"}`}><Plus size={14} /> Add Question</button>
+                      </div>
+                      )}
+                    </div>
+                    );
+                  })() : (
                     <div key={ci} className="rounded-2xl border border-gray-200 overflow-hidden">
                       {/* Class header */}
-                      <div className="flex items-center gap-3 bg-gray-50 px-4 py-3 border-b border-gray-100">
+                      <div className="flex items-center gap-3 bg-gray-50 px-4 py-3">
                         <span className="w-7 h-7 rounded-full btn-pill bg-[#db254f] text-white text-xs font-bold flex items-center justify-center shrink-0">{ci + 1}</span>
-                        <input className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-[#db254f]" placeholder={`Class ${ci + 1} name`} value={cls.name} onChange={(e) => updateClassName(ci, e.target.value)} />
+                        <input className="flex-1 min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-[#db254f]" placeholder={`Class ${ci + 1} name`} value={cls.name} onChange={(e) => updateClassName(ci, e.target.value)} />
+                        {!openCur[ci] && <span className="shrink-0 text-xs text-gray-400 hidden md:inline">{cls.videos.length} video{cls.videos.length !== 1 ? "s" : ""} · {cls.materials.length} material{cls.materials.length !== 1 ? "s" : ""}{cls.model3dHtml?.trim() ? " · 3D" : ""}</span>}
+                        <button type="button" onClick={() => toggleCur(ci)} title={openCur[ci] ? "Collapse" : "Expand"}
+                          className="shrink-0 w-9 h-9 rounded-full btn-pill bg-white border border-gray-200 hover:bg-gray-100 text-gray-500 flex items-center justify-center"><ChevronDown size={16} className={`transition-transform ${openCur[ci] ? "rotate-180" : ""}`} /></button>
                         <button type="button" onClick={() => removeClass(ci)} title="Remove class"
                           className="shrink-0 w-9 h-9 rounded-full btn-pill bg-white border border-gray-200 hover:bg-rose-50 text-gray-400 hover:text-rose-500 flex items-center justify-center"><Trash2 size={15} /></button>
                       </div>
 
-                      <div className="p-4 space-y-5">
+                      {openCur[ci] && (
+                      <div className="p-4 space-y-5 border-t border-gray-100">
                         {/* Videos in this class */}
                         <div>
                           <div className="flex items-center justify-between mb-2">
@@ -474,6 +570,7 @@ export default function ManageCoursesPage() {
                           <textarea rows={4} className={`${field} resize-y font-mono text-xs`} placeholder={'<iframe src="https://sketchfab.com/models/.../embed" ...></iframe>\n— or —\n<model-viewer src="model.glb" camera-controls auto-rotate></model-viewer>'} value={cls.model3dHtml || ""} onChange={(e) => updateClassModel3d(ci, e.target.value)} />
                         </div>
                       </div>
+                      )}
                     </div>
                   ))}
                 </div>

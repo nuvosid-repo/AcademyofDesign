@@ -119,6 +119,25 @@ p, .desc, .description, .subtitle, [class*="desc"], [class*="description"], [cla
    restores pill/circle rounding on admin buttons. */
 .btn-pill { border-radius: 9999px !important; }
 
+/* Consistent button rounding across the student (.pf-page) and admin
+   (.admin-shell) portals. Bootstrap's UNLAYERED `button{border-radius:0}` beats
+   Tailwind's layered rounded-* utilities, so without this every <button> renders
+   sharp. These !important rules undo that: a button with no radius class gets a
+   gentle default curve, and each rounded-* class is re-honored at its own size
+   (higher specificity wins over the blanket default). */
+:where(.pf-page, .admin-shell) button,
+:where(.pf-page, .admin-shell) input[type="submit"],
+:where(.pf-page, .admin-shell) input[type="button"] { border-radius: 0.625rem !important; }
+:where(.pf-page, .admin-shell) button.rounded-none { border-radius: 0 !important; }
+:where(.pf-page, .admin-shell) button.rounded-sm   { border-radius: 0.125rem !important; }
+:where(.pf-page, .admin-shell) button.rounded      { border-radius: 0.25rem !important; }
+:where(.pf-page, .admin-shell) button.rounded-md   { border-radius: 0.375rem !important; }
+:where(.pf-page, .admin-shell) button.rounded-lg   { border-radius: 0.5rem !important; }
+:where(.pf-page, .admin-shell) button.rounded-xl   { border-radius: 0.75rem !important; }
+:where(.pf-page, .admin-shell) button.rounded-2xl  { border-radius: 1rem !important; }
+:where(.pf-page, .admin-shell) button.rounded-3xl  { border-radius: 1.5rem !important; }
+:where(.pf-page, .admin-shell) button.rounded-full { border-radius: 9999px !important; }
+
 /* Hide scrollbar for date/time picker columns (still scrollable). */
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -158,6 +177,17 @@ p, .desc, .description, .subtitle, [class*="desc"], [class*="description"], [cla
 [data-theme="dark"] .admin-shell .from-rose-50\/70 { background-image: linear-gradient(to right, rgba(219,37,79,0.16), transparent) !important; }
 [data-theme="dark"] .admin-shell .from-emerald-50\/60,
 [data-theme="dark"] .admin-shell .from-emerald-50\/70 { background-image: linear-gradient(to right, rgba(16,185,129,0.14), transparent) !important; }
+
+/* Indigo/emerald/rose "-50" tints (quiz blocks, answer highlights, error notes)
+   are bright-white on dark otherwise — soften them to gentle theme-aware tints. */
+[data-theme="dark"] .admin-shell .bg-indigo-50 { background-color: rgba(99,102,241,0.12) !important; }
+[data-theme="dark"] .admin-shell .bg-indigo-100,
+[data-theme="dark"] .admin-shell .hover\:bg-indigo-100:hover { background-color: rgba(99,102,241,0.20) !important; }
+[data-theme="dark"] .admin-shell .border-indigo-200 { border-color: rgba(99,102,241,0.32) !important; }
+[data-theme="dark"] .admin-shell .border-indigo-100 { border-color: rgba(99,102,241,0.22) !important; }
+[data-theme="dark"] .admin-shell .bg-emerald-50 { background-color: rgba(16,185,129,0.14) !important; }
+[data-theme="dark"] .admin-shell .bg-rose-50,
+[data-theme="dark"] .admin-shell .hover\:bg-rose-50:hover { background-color: rgba(244,63,94,0.14) !important; }
 
 /* Light gray/rose drop-shadows read as glows on dark → soften them */
 [data-theme="dark"] .admin-shell .shadow-gray-200\/70,

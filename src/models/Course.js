@@ -30,16 +30,28 @@ const QuizQuestionSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// A written / interview question graded out of maxMarks (AI-scored).
+const MarkedQuestionSchema = new mongoose.Schema(
+  {
+    question: { type: String, default: "" },
+    maxMarks: { type: Number, default: 10 },
+    modelAnswer: { type: String, default: "" }, // optional reference answer for better AI grading
+  },
+  { _id: false }
+);
+
 // A curriculum item inside a course. `type` distinguishes a normal class
-// (videos + materials) from a quiz (questions). Existing records have no
-// `type` and are treated as classes for backward compatibility.
+// (videos + materials) from a quiz (MCQ), a written exam, or an AI interview —
+// all taken inside the course. Existing records have no `type` and are treated
+// as classes for backward compatibility.
 const ClassSchema = new mongoose.Schema(
   {
-    type: { type: String, enum: ["class", "quiz"], default: "class" },
+    type: { type: String, enum: ["class", "quiz", "written", "interview"], default: "class" },
     name: { type: String, default: "" },
     videos: { type: [VideoSchema], default: [] },
     materials: { type: [MaterialSchema], default: [] },
-    questions: { type: [QuizQuestionSchema], default: [] },
+    questions: { type: [QuizQuestionSchema], default: [] },        // MCQ (quiz)
+    markedQuestions: { type: [MarkedQuestionSchema], default: [] }, // written / interview
     model3dHtml: { type: String, default: "" }, // admin-pasted HTML embed for a 3D model preview
   },
   { _id: false }

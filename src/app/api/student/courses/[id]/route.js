@@ -63,6 +63,21 @@ export async function GET(request, { params }) {
         lastResult: r ? { score: r.score || 0, total: r.total || 0, percentage: r.percentage || 0, passed: !!r.passed } : null,
       };
     }
+    if (c.type === "written" || c.type === "interview") {
+      const r = latestByAid[`${cid}:${index}`];
+      const qs = (c.markedQuestions || []).map((q) => ({ question: q.question || "", maxMarks: Number(q.maxMarks) || 0 }));
+      return {
+        type: c.type,
+        index,
+        name: c.name || (c.type === "interview" ? `AI Interview ${index + 1}` : `Written Exam ${index + 1}`),
+        questionCount: qs.length,
+        totalMarks: qs.reduce((n, q) => n + q.maxMarks, 0),
+        // Interview questions are spoken aloud by the AI, so we send the text to
+        // the attempt page; written questions are shown for typed answers.
+        questions: qs,
+        lastResult: r ? { score: r.score || 0, total: r.total || 0, percentage: r.percentage || 0, passed: !!r.passed, breakdown: r.breakdown || [] } : null,
+      };
+    }
     return {
       type: "class",
       index,
